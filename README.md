@@ -1,6 +1,6 @@
 # 💡 Resolveit
 
-**Public Issue Resolution Platform (Realtime Research Project)**
+**Public Issue Resolution Platform**
 
 Resolveit is an innovative civic engagement platform designed to bridge the gap between citizens reporting public issues and government authorities taking effective action. Developed as a Realtime Research Project (RTRP) and adopted under the **LYFSpot** initiative, the system streamlines issue reporting, leverages community consensus for prioritization, and automates official communication to ensure timely resolution.
 
