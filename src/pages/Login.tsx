@@ -3,6 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
 import { useProfile } from '../context/ProfileContext'; // Adjust path if needed
 
+// ----------------------------------------------------------------------
+// ✅ CRITICAL FIX: Base URL for Deployed API
+// This constant pulls the live Render URL from the Vercel environment variable.
+// ----------------------------------------------------------------------
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 export function Login() {
   const [formData, setFormData] = useState({
     email: '',
@@ -17,7 +23,11 @@ export function Login() {
     e.preventDefault();
 
     try {
-      const response = await fetch('/api/auth/login', {
+      // ----------------------------------------------------------
+      // ✅ FIX APPLIED HERE: Use the explicit base URL
+      // Now the request goes to: https://resolveit-api.onrender.com/api/auth/login
+      // ----------------------------------------------------------
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48,7 +58,7 @@ export function Login() {
         setUser(responseData.data.user); // Update context state
 
         alert("Login successful!");
-        navigate("/profile"); // Redirect to profile or dashboard (changed from 'profile/' to '/profile' for consistency and direct path)
+        navigate("/profile");
       } else {
         // Improved error handling for backend messages
         alert(responseData.message || "Login failed.");
@@ -57,7 +67,7 @@ export function Login() {
       }
     } catch (error) {
       if (error instanceof Error) {
-        alert(error.message);
+        alert(`Connection Error: ${error.message}. Check if VITE_API_URL is correct.`);
         setFormData((prev) => ({ ...prev, password: "" })); // Clear password on error
         console.error("Login error:", error.message);
       } else {

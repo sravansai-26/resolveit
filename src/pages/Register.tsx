@@ -3,6 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import { useProfile } from '../context/ProfileContext';
 
+// ----------------------------------------------------------------------
+// ✅ CRITICAL FIX: Base URL for Deployed API
+// This constant pulls the live Render URL from the Vercel environment variable.
+// This prevents the application from failing back to the relative path (localhost).
+// ----------------------------------------------------------------------
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 export function Register() {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -32,7 +39,11 @@ export function Register() {
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
+      // ----------------------------------------------------------
+      // ✅ FIX APPLIED HERE: Use the explicit base URL
+      // Now the request goes to: https://resolveit-api.onrender.com/api/auth/register
+      // ----------------------------------------------------------
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -50,7 +61,6 @@ export function Register() {
       const responseData = await response.json(); // Get the full response data
 
       if (response.ok) {
-        // --- FIX APPLIED HERE ---
         // Access token and user from responseData.data as per your backend structure
         localStorage.setItem('token', responseData.data.token);
         localStorage.setItem('user', JSON.stringify(responseData.data.user));
@@ -73,7 +83,8 @@ export function Register() {
     } catch (error) {
       // General network or unexpected errors
       if (error instanceof Error) {
-        alert(error.message);
+        // This catches the 'Failed to fetch' network error
+        alert(`Connection Error: ${error.message}. Check if VITE_API_URL is correct.`);
       } else {
         alert('Something went wrong!');
       }
