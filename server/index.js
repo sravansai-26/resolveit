@@ -5,49 +5,53 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path'; // Ensure 'join' is imported from 'path'
+import { dirname, join } from 'path';
 
-// ----------------------------------------------------
-// DEBUGGING ADDITIONS: START
-// These lines help us diagnose environment variable loading issues
-// ----------------------------------------------------
+// --- CONFIGURATION LOADING ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-// Log current working directory and script directory
-console.log('DEBUG: Current Working Directory (process.cwd()):', process.cwd());
-console.log('DEBUG: Script Directory (__dirname):', __dirname);
 
 // Explicitly load .env from the same directory as this script
 dotenv.config({ path: join(__dirname, '.env') });
 
-// Log SMTP variables AFTER dotenv.config() has run
-console.log('DEBUG: SMTP_USER from .env (After dotenv.config()):', process.env.SMTP_USER);
-console.log('DEBUG: SMTP_PASS from .env (After dotenv.config()):', process.env.SMTP_PASS ? '********' : 'NOT SET');
-// ----------------------------------------------------
-// DEBUGGING ADDITIONS: END
-// ----------------------------------------------------
-
-
+// --- ROUTE IMPORTS ---
 import authRoutes from './routes/auth.js';
 import issueRoutes from './routes/issues.js';
 import userRoutes from './routes/users.js';
 import feedbackRoutes from './routes/feedback.js';
-
 import { auth } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ✅ CORS setup for localhost origins
+// ------------------------------------------------------------------
+// ✅ PRODUCTION CORS SETUP (CRITICAL CHANGE)
+// Allowed origins for both development and production (pulled from ENV)
+// ------------------------------------------------------------------
+const allowedOrigins = [
+    'http://localhost:5173',           // For local React development
+    process.env.CORS_ORIGIN,           // Live production domain (e.g., https://resolveit.netlify.app)
+];
+
 const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        // Or requests from localhost on any port
-        if (!origin || /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+        // Allow requests with no origin (like mobile apps, curl requests)
+        if (!origin) {
             return callback(null, true);
         }
-        callback(new Error('Not allowed by CORS'));
+
+        // Check if the requesting origin is in the allowed list
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            // Check if the origin matches the deployed environment variable
+            const isAllowed = origin === process.env.CORS_ORIGIN;
+            if (isAllowed) {
+                callback(null, true);
+            } else {
+                callback(new Error(`Not allowed by CORS: ${origin}`));
+            }
+        }
     },
     credentials: true,
 };
@@ -57,12 +61,12 @@ app.use(cors(corsOptions));
 app.use(helmet());
 app.use(express.json());
 
+// Logging middleware for development only
 if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
 }
 
-// ✨ NEW: Middleware to add Cross-Origin-Resource-Policy header for static files
-// This must come BEFORE the express.static middleware for /uploads
+// ✨ NEW: Middleware to add Cross-Origin-Resource-Policy header for static files (fix for browser display)
 app.use('/uploads', (req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next(); // Pass control to the next middleware (express.static)
@@ -77,14 +81,17 @@ app.get('/', (req, res) => {
     res.send('ResolveIt API is running');
 });
 
-// ✅ Validate required environment variables
-// These checks should happen after dotenv.config()
-if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
-    console.error('Missing required environment variables (MONGODB_URI or JWT_SECRET)');
+// ------------------------------------------------------------------
+// ✅ MONGODB CONNECTION AND VALIDATION
+// ------------------------------------------------------------------
+
+// Validate required environment variables
+if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.CORS_ORIGIN) {
+    console.error('Missing required environment variables (MONGODB_URI, JWT_SECRET, or CORS_ORIGIN)');
     process.exit(1);
 }
 
-// ✅ MongoDB connection
+// MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch((err) => {
@@ -117,6 +124,7 @@ app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
     res.status(500).json({
         message: 'Something went wrong!',
+        // Only include the detailed error message in development mode
         ...(process.env.NODE_ENV === 'development' && { error: err.message })
     });
 });
