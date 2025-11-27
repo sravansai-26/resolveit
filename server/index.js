@@ -25,36 +25,23 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ------------------------------------------------------------------
-// ✅ PRODUCTION CORS SETUP (CRITICAL CHANGE)
-// Allowed origins for both development and production (pulled from ENV)
+// ✅ CRITICAL FIX: SIMPLIFIED CORS CONFIGURATION
+// We now rely on the 'cors' package to handle the array check directly, 
+// which is cleaner and guarantees the correct headers are set in production.
 // ------------------------------------------------------------------
-const allowedOrigins = [
-    'http://localhost:5173',           // For local React development
-    process.env.CORS_ORIGIN,           // Live production domain (e.g., https://resolveit.netlify.app)
-];
+
+const liveOrigin = process.env.CORS_ORIGIN;
+const devOrigin = 'http://localhost:5173';
 
 const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, curl requests)
-        if (!origin) {
-            return callback(null, true);
-        }
-
-        // Check if the requesting origin is in the allowed list
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            // Check if the origin matches the deployed environment variable
-            const isAllowed = origin === process.env.CORS_ORIGIN;
-            if (isAllowed) {
-                callback(null, true);
-            } else {
-                callback(new Error(`Not allowed by CORS: ${origin}`));
-            }
-        }
-    },
+    // Pass an array of allowed domains. The 'cors' package automatically 
+    // sets the Access-Control-Allow-Origin header if the request origin matches.
+    origin: [liveOrigin, devOrigin], 
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Ensure all methods are allowed
+    optionsSuccessStatus: 204
 };
+
 app.use(cors(corsOptions));
 
 // ✅ Middleware setup
@@ -68,7 +55,8 @@ if (process.env.NODE_ENV === 'development') {
 
 // ✨ NEW: Middleware to add Cross-Origin-Resource-Policy header for static files (fix for browser display)
 app.use('/uploads', (req, res, next) => {
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    // This header is for security, not CORS, but is good practice for static assets
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); 
     next(); // Pass control to the next middleware (express.static)
 });
 
@@ -92,7 +80,7 @@ if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.CORS_ORI
 }
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI as string) // Cast as string for TypeScript
     .then(() => console.log('Connected to MongoDB'))
     .catch((err) => {
         console.error('MongoDB connection error:', err);
