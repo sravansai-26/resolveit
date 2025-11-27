@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// Login.tsx
+
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
-import { useProfile } from '../context/ProfileContext'; // Adjust path if needed
+// ----------------------------------------------------------
+// ✅ FIX 1: CHANGE CONTEXT IMPORT
+// Use the central AuthContext for login/logout state management
+import { useAuth } from '../context/AuthContext'; 
+// ----------------------------------------------------------
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX: Base URL for Deployed API
+// Base URL for Deployed API
 // This constant pulls the live Render URL from the Vercel environment variable.
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -15,18 +21,22 @@ export function Login() {
     password: '',
     rememberMe: false,
   });
+  const [loading, setLoading] = useState(false); // New loading state for button
 
   const navigate = useNavigate();
-  const { setUser } = useProfile(); // Get setUser from context
+  const location = useLocation(); // Get current location to check for redirects
+  
+  // ----------------------------------------------------------
+  // ✅ FIX 2: ACCESS AUTHENTICATION FUNCTIONS
+  // Access the centralized login function
+  const { login } = useAuth(); 
+  // ----------------------------------------------------------
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
 
     try {
-      // ----------------------------------------------------------
-      // ✅ FIX APPLIED HERE: Use the explicit base URL
-      // Now the request goes to: https://resolveit-api.onrender.com/api/auth/login
-      // ----------------------------------------------------------
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: {
@@ -38,27 +48,28 @@ export function Login() {
         }),
       });
 
-      const responseData = await response.json(); // Get the full response data
+      const responseData = await response.json();
 
-      if (response.ok) {
-        // --- FIX APPLIED HERE ---
-        // Access token and user from responseData.data as per your backend structure
-        if (formData.rememberMe) {
-          localStorage.setItem("token", responseData.data.token);
-          localStorage.setItem("user", JSON.stringify(responseData.data.user));
-          sessionStorage.removeItem("token");
-          sessionStorage.removeItem("user");
-        } else {
-          sessionStorage.setItem("token", responseData.data.token);
-          sessionStorage.setItem("user", JSON.stringify(responseData.data.user));
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-        }
+      if (response.ok && responseData.success) {
+        
+        const { token, user } = responseData.data;
 
-        setUser(responseData.data.user); // Update context state
+        // ----------------------------------------------------------
+        // ✅ FIX 3: CENTRALIZED LOGIN CALL
+        // Use the function from AuthContext to handle all storage and state updates.
+        login(token, user, formData.rememberMe);
+        // ----------------------------------------------------------
 
         alert("Login successful!");
-        navigate("/profile");
+        
+        // ----------------------------------------------------------
+        // ✅ FIX 4: TARGETED REDIRECTION
+        // Redirect to the page the user was trying to access (if set by RequireAuth), 
+        // otherwise default to the /dashboard. Use { replace: true } for clean history.
+        // ----------------------------------------------------------
+        const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
+        navigate(from, { replace: true });
+        
       } else {
         // Improved error handling for backend messages
         alert(responseData.message || "Login failed.");
@@ -68,11 +79,13 @@ export function Login() {
     } catch (error) {
       if (error instanceof Error) {
         alert(`Connection Error: ${error.message}. Check if VITE_API_URL is correct.`);
-        setFormData((prev) => ({ ...prev, password: "" })); // Clear password on error
+        setFormData((prev) => ({ ...prev, password: "" }));
         console.error("Login error:", error.message);
       } else {
         alert("Unexpected error during login.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -148,11 +161,12 @@ export function Login() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             title="Sign In"
+            disabled={loading}
           >
             <LogIn size={20} />
-            <span>Sign In</span>
+            <span>{loading ? 'Signing In...' : 'Sign In'}</span>
           </button>
         </form>
 

@@ -1,3 +1,5 @@
+// Feedback.tsx
+
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 import axios from 'axios';
@@ -9,8 +11,7 @@ interface FeedbackData {
 }
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX: Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
+// Base URL for Deployed API
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -25,6 +26,11 @@ export function Feedback() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Helper to get token from storage (consistent with AuthContext logic)
+  const getToken = (): string | null => {
+      return localStorage.getItem('token') || sessionStorage.getItem('token');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitStatus('');
@@ -37,11 +43,14 @@ export function Feedback() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // ----------------------------------------------------------
+      // ✅ FIX: Use the robust getToken helper for authentication
+      const token = getToken(); 
+      // ----------------------------------------------------------
       
-      // ✅ FIX APPLIED HERE: Use the explicit API_BASE_URL
+      // API call uses the explicit API_BASE_URL
       const res = await axios.post(
-        `${API_BASE_URL}/api/feedback`, // CHANGED FROM 'http://localhost:5000/api/feedback'
+        `${API_BASE_URL}/api/feedback`, 
         feedback,
         {
           headers: {
@@ -52,14 +61,15 @@ export function Feedback() {
       );
 
       if (res.status === 201 || res.status === 200) {
-        setSubmitStatus('Thank you for your feedback!');
+        setSubmitStatus('Thank you for your feedback! It has been submitted successfully.');
         setFeedback({ type: '', subject: '', message: '' });
       } else {
-        setError('Failed to submit feedback. Please try again.');
+        // Use the message from the response body if available
+        setError(res.data?.message || 'Failed to submit feedback. Please try again.');
       }
     } catch (err: any) {
       console.error('Feedback submit error:', err);
-      setError(err.response?.data?.message || 'An error occurred. Please try again.');
+      setError(err.response?.data?.message || 'An error occurred. Please check your network connection.');
     } finally {
       setLoading(false);
     }

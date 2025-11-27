@@ -1,3 +1,5 @@
+// ProfileContext.tsx
+
 import React, {
   createContext,
   useContext,
@@ -12,9 +14,9 @@ import React, {
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-// ==================== Type Definitions (FIXED for TypeScript) ====================
+// ==================== Type Definitions ====================
 
-export type User = { // ✅ FIX: Added export
+export type User = { 
   _id: string;
   firstName: string;
   lastName: string;
@@ -22,21 +24,21 @@ export type User = { // ✅ FIX: Added export
   phone: string;
   address: string;
   bio: string;
-  avatar: string;
+  avatar: string; // Ready for Cloudinary URL
 };
 
-export type Vote = { // ✅ FIX: Added export
+export type Vote = { 
   user: string;
   isUpvote: boolean;
 };
 
-export type Issue = { // ✅ FIX: Added export
+export type Issue = { 
   _id: string;
   title: string;
   description: string;
   category: string;
   location: string;
-  media: string[];
+  media: string[]; // Ready for Cloudinary URLs
   votes: Vote[];
   upvotes: number;
   downvotes: number;
@@ -47,7 +49,7 @@ export type Issue = { // ✅ FIX: Added export
   updatedAt: string;
 };
 
-export type ProfileContextType = { // ✅ CRITICAL FIX: Added export
+export type ProfileContextType = { 
   user: User | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   issues: Issue[];
@@ -78,6 +80,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const getToken = () => {
+    // Robust token retrieval logic
     return localStorage.getItem('token') || sessionStorage.getItem('token');
   };
 
@@ -100,7 +103,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw new Error('No authentication token found. Please log in.');
       }
 
-      // ✅ FIX 4: fetchProfile - Using live URL
+      // Using live URL
       const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'GET',
         headers: {
@@ -136,7 +139,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw new Error('No authentication token found. Please log in.');
       }
 
-      // ✅ FIX 5: fetchIssues - Using live URL
+      // Using live URL
       const res = await fetch(`${API_BASE_URL}/api/issues/my`, {
         method: 'GET',
         headers: {
@@ -172,7 +175,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw new Error('No authentication token found. Please log in.');
       }
 
-      // ✅ FIX 6: fetchReposts - Using live URL
+      // Using live URL
       const res = await fetch(`${API_BASE_URL}/api/issues/reposts/me`, {
         method: 'GET',
         headers: {
@@ -208,19 +211,22 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          formData.append(key, value as string);
+          // Only append non-file fields that are simple strings/values
+          formData.append(key, value as string); 
         }
       });
 
       if (avatarFile) {
+        // Append the actual File object for Multer/Cloudinary to process
         formData.append('avatar', avatarFile);
       }
 
-      // ✅ FIX 7: updateProfile - Using live URL
+      // Using live URL
       const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
+          // DO NOT set Content-Type header when sending FormData
         },
         body: formData,
       });
@@ -246,7 +252,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const token = getToken();
       if (!token) throw new Error('No authentication token found. Please log in.');
 
-      // ✅ FIX 8: deleteIssue - Using live URL
+      // Using live URL
       const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}`, {
         method: 'DELETE',
         headers: {
@@ -271,7 +277,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // NEW: Function to toggle repost status (used for "un-reposting" in My Reposts)
+  // Function to toggle repost status
   const toggleRepost = async (issueId: string) => {
     try {
       const token = getToken();
@@ -279,21 +285,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw new Error('No authentication token found.');
       }
 
-      // ✅ FIX 9: toggleRepost - Using live URL
+      // Using live URL
       const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/repost`, {
-        method: 'POST', // This endpoint acts as a toggle, so POST is correct
+        method: 'POST', 
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({}), // Empty body for a toggle POST
+        body: JSON.stringify({}), 
       });
 
       const json = await res.json();
 
       if (res.ok && json.success) {
-        // Since this function is called from "My Reposts" and is for un-reposting,
-        // we filter the issue out of the local reposts state.
         setReposts((prevReposts) => prevReposts.filter((issue) => issue._id !== issueId));
       } else {
         throw new Error(json.message || 'Failed to toggle repost status.');

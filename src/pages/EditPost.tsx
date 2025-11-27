@@ -1,7 +1,8 @@
+// EditPost.tsx
+
 import React, { useEffect, useState, ChangeEvent, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-// import { url } from 'inspector'; // REMOVED: Unused inspector import (Good practice cleanup)
 
 interface Issue {
   _id: string;
@@ -9,7 +10,7 @@ interface Issue {
   description: string;
   category: string;
   location: string;
-  media: string[];
+  media: string[]; // These are now expected to be full Cloudinary URLs
   status: string;
 }
 
@@ -23,7 +24,7 @@ const categories = [
 ];
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX: Base URL for Deployed API (Needed for API calls only)
+// Base URL for Deployed API
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -39,7 +40,13 @@ export function EditPost() {
   const [existingMedia, setExistingMedia] = useState<string[]>([]);
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Added submission state
   const [error, setError] = useState('');
+
+  // Helper to get token from storage (consistent with AuthContext logic)
+  const getToken = (): string | null => {
+      return localStorage.getItem('token') || sessionStorage.getItem('token');
+  };
 
   useEffect(() => {
     async function fetchIssue() {
@@ -50,17 +57,25 @@ export function EditPost() {
       }
 
       try {
-        const token = localStorage.getItem('token');
-        // ✅ FIX 1: API call correctly uses API_BASE_URL
+        const token = getToken(); // Use robust getToken
+        if (!token) {
+            setError("Authentication token not found. Please log in.");
+            setLoading(false);
+            return;
+        }
+
+        // API call uses API_BASE_URL
         const response = await axios.get(`${API_BASE_URL}/api/issues/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
         const data = response.data.data; 
         setTitle(data.title);
         setDescription(data.description);
         setCategory(data.category);
         setLocation(data.location);
-        setExistingMedia(data.media || []); // This media array now contains full Cloudinary URLs
+        // Data is expected to be full Cloudinary URLs
+        setExistingMedia(data.media || []); 
         setStatus(data.status);
         setLoading(false);
       } catch (err) {
@@ -68,7 +83,7 @@ export function EditPost() {
         if (axios.isAxiosError(err) && err.response) {
             setError(`Failed to load issue details: ${err.response.status} - ${err.response.data?.message || 'Server error'}`);
         } else {
-            setError('Failed to load issue details. Please try again.');
+            setError('Failed to load issue details. Please check network connection.');
         }
         setLoading(false);
       }
@@ -101,9 +116,12 @@ export function EditPost() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setIsSubmitting(true);
+    setError('');
 
     if (!title || !description || !location) {
       setError('Please fill in all required fields.');
+      setIsSubmitting(false);
       return;
     }
 
@@ -114,30 +132,44 @@ export function EditPost() {
     formData.append('location', location);
     formData.append('status', status);
 
+    // CRITICAL: Send the array of URLs for media that should be KEPT
     formData.append('existingMedia', JSON.stringify(existingMedia));
 
+    // Send new media files for upload
     mediaFiles.forEach(file => {
       formData.append('media', file);
     });
 
     try {
-      const token = localStorage.getItem('token');
-      // ✅ FIX 2: API call correctly uses API_BASE_URL
+      const token = getToken(); // Use robust getToken
+      if (!token) throw new Error('Authentication required.');
+
+      // API call uses API_BASE_URL
       await axios.put(`${API_BASE_URL}/api/issues/${id}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           // 'Content-Type': 'multipart/form-data' is handled automatically by axios
         }
       });
-      navigate('/profile');
+      
+      alert('Issue updated successfully!');
+      // Use replace: true for cleaner history after submission
+      navigate('/profile', { replace: true }); 
+
     } catch (err) {
-      setError('Failed to update issue');
       console.error('Failed to update issue:', err); 
-    }
+      if (axios.isAxiosError(err) && err.response) {
+          setError(`Failed to update issue: ${err.response.data?.message || 'Server error'}`);
+      } else {
+          setError('Failed to update issue. Please check the network.');
+      }
+    } finally {
+        setIsSubmitting(false);
+    }
   }
 
   if (loading) return <div className="text-center py-10">Loading issue details...</div>;
-  if (error && !loading) return <div className="text-red-600 text-center py-10">{error}</div>;
+  if (error && !loading && !isSubmitting) return <div className="text-red-600 text-center py-10">{error}</div>;
 
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white rounded shadow">
@@ -245,11 +277,9 @@ export function EditPost() {
                 role="group"
                 aria-label={`Existing media ${i + 1}`}
               >
+                {/* Use the full Cloudinary URL directly */}
                 <img
-                  // ----------------------------------------------------------
-                  // ✅ FIX 3: Clean up media display logic for Cloudinary
-                  // ----------------------------------------------------------
-                  src={url.startsWith('http') ? url : ''} // Use the full Cloudinary URL directly
+                  src={url} 
                   alt={`Existing media ${i + 1}`}
                   className="w-20 h-20 object-cover rounded border"
                 />
@@ -290,8 +320,8 @@ export function EditPost() {
                   role="group"
                   aria-label={`New media file ${file.name}`}
                 >
-                  <span className="inline-block w-20 h-20 border rounded flex items-center justify-center text-xs text-gray-700 bg-gray-100">
-                    {file.name}
+                  <span className="inline-block w-20 h-20 border rounded flex items-center justify-center text-xs text-gray-700 bg-gray-100 text-center p-1">
+                    {file.name.substring(0, 15)}...
                   </span>
                   <button
                     type="button"
@@ -310,9 +340,11 @@ export function EditPost() {
 
         <button
           type="submit"
-          className="mt-6 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+          className="mt-6 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:opacity-50"
+          disabled={isSubmitting || loading}
+          aria-disabled={isSubmitting || loading}
         >
-          Save Changes
+          {isSubmitting ? 'Saving Changes...' : 'Save Changes'}
         </button>
       </form>
     </div>

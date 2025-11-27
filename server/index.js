@@ -1,3 +1,5 @@
+// index.js
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -25,20 +27,15 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ------------------------------------------------------------------
-// ✅ CRITICAL FIX: UNIVERSAL WILDACARD CORS FOR DEPLOYMENT
-// This configuration bypasses complex origin checks and accepts requests 
-// from *any* domain. It solves deployment issues when specific whitelisting fails.
+// CORS Configuration for Deployment Stability
 // ------------------------------------------------------------------
 
 const corsOptions = {
-    // Set origin to '*' to accept all domains. 
-    // Note: When using '*', you cannot set credentials: true in the browser, 
-    // but the express/cors package handles this correctly server-side when 
-    // credentials are required for specific routes.
-    origin: '*', 
-    credentials: true, // Required for sending cookies/auth headers
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    optionsSuccessStatus: 204
+    // Universal wildcard for deployment flexibility
+    origin: '*', 
+    credentials: true, 
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
@@ -49,51 +46,47 @@ app.use(express.json());
 
 // Logging middleware for development only
 if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
+    app.use(morgan('dev'));
 }
 
-// ✨ Middleware to add Cross-Origin-Resource-Policy header for static files
-app.use('/uploads', (req, res, next) => {
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); 
-    next();
-});
-
-// ✅ Serve static files for uploaded images/videos
-app.use('/uploads', express.static(join(__dirname, 'uploads')));
+// ------------------------------------------------------------------
+// ❌ REMOVED: Obsolete Local File System Setup 
+// These lines are no longer needed since media is handled by Cloudinary.
+// app.use('/uploads', (req, res, next) => { ... });
+// app.use('/uploads', express.static(join(__dirname, 'uploads')));
+// ------------------------------------------------------------------
 
 
 // ✅ Health check route
 app.get('/', (req, res) => {
-    res.send('ResolveIt API is running');
+    res.send('ResolveIt API is running');
 });
 
 // ------------------------------------------------------------------
-// ✅ MONGODB CONNECTION AND VALIDATION
+// MONGODB CONNECTION AND VALIDATION
 // ------------------------------------------------------------------
 
 // Validate required environment variables
-// Note: We remove CORS_ORIGIN check here, as we are no longer using it for whitelisting.
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
-    console.error('Missing required environment variables (MONGODB_URI or JWT_SECRET)');
-    process.exit(1);
+    console.error('Missing required environment variables (MONGODB_URI or JWT_SECRET)');
+    process.exit(1);
 }
 
-// FIX: Removed TypeScript 'as string' assertion
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB'))
-    .catch((err) => {
-        console.error('MongoDB connection error:', err);
-        process.exit(1);
-    });
+    .then(() => console.log('Connected to MongoDB'))
+    .catch((err) => {
+        console.error('MongoDB connection error:', err);
+        process.exit(1);
+    });
 
 // ✅ Optional: Add /api/auth/me to check token and return user
 app.get('/api/auth/me', auth, async (req, res) => {
-    try {
-        // req.user is attached by the auth middleware
-        res.json(req.user); 
-    } catch (err) {
-        res.status(500).json({ message: 'Failed to fetch user profile' });
-    }
+    try {
+        // req.user is attached by the auth middleware
+        res.json({ success: true, user: req.user }); // Wrap in success: true for consistency
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to fetch user profile' });
+    }
 });
 
 // ✅ API Routes
@@ -104,37 +97,37 @@ app.use('/api/feedback', feedbackRoutes);
 
 // ✅ 404 route handler
 app.use((req, res) => {
-    res.status(404).json({ message: 'Not Found' });
+    res.status(404).json({ message: 'Not Found' });
 });
 
 // ✅ Global error handler
 app.use((err, req, res, next) => {
-    console.error('Error:', err.stack);
-    res.status(500).json({
-        message: 'Something went wrong!',
-        // Only include the detailed error message in development mode
-        ...(process.env.NODE_ENV === 'development' && { error: err.message })
-    });
+    console.error('Error:', err.stack);
+    res.status(500).json({
+        message: 'Something went wrong!',
+        // Only include the detailed error message in development mode
+        ...(process.env.NODE_ENV === 'development' && { error: err.message })
+    });
 });
 
 // ✅ Graceful shutdown handlers
 process.on('SIGINT', async () => {
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed');
-    process.exit(0);
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
+    process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    process.exit(1);
+    console.error('Uncaught Exception:', err);
+    process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled Rejection:', reason);
-    process.exit(1);
+    console.error('Unhandled Rejection:', reason);
+    process.exit(1);
 });
 
 // ✅ Start server
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });

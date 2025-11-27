@@ -1,12 +1,17 @@
-import { useState } from 'react';
+// Register.tsx
+
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
-import { useProfile } from '../context/ProfileContext';
+// ----------------------------------------------------------
+// ✅ FIX 1: CHANGE CONTEXT IMPORT
+// Use the central AuthContext for login/logout state management
+import { useAuth } from '../context/AuthContext'; 
+// ----------------------------------------------------------
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX: Base URL for Deployed API
+// Base URL for Deployed API
 // This constant pulls the live Render URL from the Vercel environment variable.
-// This prevents the application from failing back to the relative path (localhost).
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -21,9 +26,15 @@ export function Register() {
     address: '',
     agreeToTerms: false
   });
+  const [loading, setLoading] = useState(false); // New loading state for button
 
   const navigate = useNavigate();
-  const { setUser } = useProfile(); // get setUser from custom hook
+  
+  // ----------------------------------------------------------
+  // ✅ FIX 2: ACCESS AUTHENTICATION FUNCTIONS
+  // Access the centralized login function
+  const { login } = useAuth(); 
+  // ----------------------------------------------------------
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,12 +48,11 @@ export function Register() {
       alert('You must agree to the terms and conditions.');
       return;
     }
+    
+    setLoading(true);
 
     try {
-      // ----------------------------------------------------------
-      // ✅ FIX APPLIED HERE: Use the explicit base URL
-      // Now the request goes to: https://resolveit-api.onrender.com/api/auth/register
-      // ----------------------------------------------------------
+      // API call to register endpoint
       const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
@@ -58,18 +68,27 @@ export function Register() {
         })
       });
 
-      const responseData = await response.json(); // Get the full response data
+      const responseData = await response.json();
 
-      if (response.ok) {
-        // Access token and user from responseData.data as per your backend structure
-        localStorage.setItem('token', responseData.data.token);
-        localStorage.setItem('user', JSON.stringify(responseData.data.user));
+      if (response.ok && responseData.success) {
+        
+        const { token, user } = responseData.data;
 
-        // Update React context
-        setUser(responseData.data.user);
+        // ----------------------------------------------------------
+        // ✅ FIX 3: CENTRALIZED LOGIN CALL
+        // Use the function from AuthContext to handle all storage and state updates.
+        // Registration is usually treated as a persistent login (rememberMe=true)
+        login(token, user, true); 
+        // ----------------------------------------------------------
 
         alert('Account created successfully!');
-        navigate('/profile'); // Redirect to profile or dashboard
+        
+        // ----------------------------------------------------------
+        // ✅ FIX 4: TARGETED REDIRECTION
+        // Redirect to the dashboard/home page. Use { replace: true } for clean history.
+        navigate('/dashboard', { replace: true });
+        // ----------------------------------------------------------
+        
       } else {
         // Improved error handling for validation errors from backend
         if (responseData.errors && responseData.errors.length > 0) {
@@ -83,11 +102,12 @@ export function Register() {
     } catch (error) {
       // General network or unexpected errors
       if (error instanceof Error) {
-        // This catches the 'Failed to fetch' network error
         alert(`Connection Error: ${error.message}. Check if VITE_API_URL is correct.`);
       } else {
         alert('Something went wrong!');
       }
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -252,11 +272,12 @@ export function Register() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center gap-2"
+            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center gap-2 disabled:opacity-50"
             aria-label="Create Account"
+            disabled={loading}
           >
             <UserPlus size={20} />
-            <span>Create Account</span>
+            <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
           </button>
         </form>
       </div>

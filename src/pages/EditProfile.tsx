@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react';
+// EditProfile.tsx
+
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Save, User, Mail, Phone, MapPin, Camera, FileText } from 'lucide-react';
-import { useProfile } from '../context/ProfileContext';
+import { useProfile } from '../context/ProfileContext'; // Assuming path adjustment to 'contexts'
 
-// NOTE: We keep this constant because it is used for navigation (not shown here)
-// and other API calls, but we REMOVE its use in media display.
+// NOTE: This constant is kept for reference but is not needed for file paths here.
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function EditProfile() {
   const navigate = useNavigate();
-  const { user, updateProfile } = useProfile();
+  // Assuming useProfile is now correctly imported from a central context directory
+  const { user, updateProfile } = useProfile(); 
 
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
@@ -18,15 +20,17 @@ export function EditProfile() {
     phone: user?.phone || '',
     address: user?.address || '',
     bio: user?.bio || '',
-    avatar: user?.avatar || '',
+    // The existing avatar URL (Cloudinary URL)
+    avatar: user?.avatar || '', 
   });
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string>(formData.avatar);
+  // avatarPreview holds the Cloudinary URL or the local 'blob:' URL for preview
+  const [avatarPreview, setAvatarPreview] = useState<string>(formData.avatar); 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Cleanup object URL on unmount or avatar change
+  // Clean up object URL on unmount or avatar change
   useEffect(() => {
     return () => {
       if (avatarPreview && avatarPreview.startsWith('blob:')) {
@@ -40,16 +44,13 @@ export function EditProfile() {
     setLoading(true);
     setError(null);
 
-    if (!formData.avatar && !avatarFile) {
-      setError("Please upload a profile picture.");
-      setLoading(false);
-      return;
-    }
-
     try {
-      // The API call happens inside this function (updateProfile).
+      // The updateProfile call handles sending the formData and avatarFile 
+      // as multipart data to the backend, which will upload to Cloudinary.
       await updateProfile(formData, avatarFile || undefined); 
-      navigate('/profile');
+      
+      // Clean redirection after success
+      navigate('/profile', { replace: true }); 
     } catch (err: any) {
       setError(err.message || 'Failed to update profile');
     } finally {
@@ -66,14 +67,12 @@ export function EditProfile() {
           <div className="flex items-center justify-center mb-6">
             <div className="relative">
               <img
-                // ----------------------------------------------------------
-                // ✅ FINAL FIX: Use avatarPreview directly (now contains Cloudinary URL)
-                // We check if it starts with 'http' (Cloudinary URL) or 'blob:' (local preview)
-                // ----------------------------------------------------------
+                // If avatarPreview is a full URL (http or blob), use it. Otherwise, use a fallback.
                 src={
                   avatarPreview.startsWith('http') || avatarPreview.startsWith('blob:')
                     ? avatarPreview 
-                    : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200'
+                    // Using a local relative path for default is generally safer than external Unsplash link
+                    : '/default-avatar.jpg' // <-- Adjust this path to your default avatar image 
                 }
                 alt="Profile Avatar"
                 className="w-32 h-32 rounded-full object-cover"
@@ -92,7 +91,7 @@ export function EditProfile() {
                     setAvatarPreview(objectUrl);
                     setFormData((prev) => ({
                       ...prev,
-                      avatar: objectUrl,
+                      avatar: objectUrl, // Just for the sake of formData structure
                     }));
                   }
                 }}
@@ -188,7 +187,7 @@ export function EditProfile() {
               />
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             </div>
-          </div>
+            </div>
 
           {/* Bio */}
           <div>
