@@ -1,8 +1,16 @@
 {
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+    { 
+      "source": "/(.*)", 
+      "destination": "/index.html" 
     }
-  ]
+  ],
+  "build": {
+    "env": {
+      "VITE_API_URL": "https://resolveit-api.onrender.com" 
+    
+    }
+  },
+  
+  "publicDir": "dist" 
 }
