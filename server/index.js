@@ -26,19 +26,18 @@ const PORT = process.env.PORT || 5000;
 
 // ------------------------------------------------------------------
 // ✅ CRITICAL FIX: SIMPLIFIED CORS CONFIGURATION
-// We now rely on the 'cors' package to handle the array check directly, 
-// which is cleaner and guarantees the correct headers are set in production.
+// This relies on the 'cors' package to handle the origin array directly,
+// which is the most reliable method for Node.js APIs on Render/Vercel.
 // ------------------------------------------------------------------
 
 const liveOrigin = process.env.CORS_ORIGIN;
 const devOrigin = 'http://localhost:5173';
 
 const corsOptions = {
-    // Pass an array of allowed domains. The 'cors' package automatically 
-    // sets the Access-Control-Allow-Origin header if the request origin matches.
+    // Array of allowed domains: [Live Vercel URL, Local Development URL]
     origin: [liveOrigin, devOrigin], 
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Ensure all methods are allowed
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     optionsSuccessStatus: 204
 };
 
@@ -53,11 +52,10 @@ if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
 }
 
-// ✨ NEW: Middleware to add Cross-Origin-Resource-Policy header for static files (fix for browser display)
+// ✨ Middleware to add Cross-Origin-Resource-Policy header for static files
 app.use('/uploads', (req, res, next) => {
-    // This header is for security, not CORS, but is good practice for static assets
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); 
-    next(); // Pass control to the next middleware (express.static)
+    next();
 });
 
 // ✅ Serve static files for uploaded images/videos
@@ -79,8 +77,8 @@ if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.CORS_ORI
     process.exit(1);
 }
 
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI as string) // Cast as string for TypeScript
+// FIX: Removed TypeScript 'as string' assertion
+mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch((err) => {
         console.error('MongoDB connection error:', err);
@@ -90,7 +88,8 @@ mongoose.connect(process.env.MONGODB_URI as string) // Cast as string for TypeSc
 // ✅ Optional: Add /api/auth/me to check token and return user
 app.get('/api/auth/me', auth, async (req, res) => {
     try {
-        res.json(req.user);
+        // req.user is attached by the auth middleware
+        res.json(req.user); 
     } catch (err) {
         res.status(500).json({ message: 'Failed to fetch user profile' });
     }
