@@ -1,28 +1,12 @@
 {
-  "version": 2,
-  "builds": [
-    {
-     
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-      
-        "distDir": "dist" 
-      }
-    }
-  ],
   "rewrites": [
-   
     {
       "source": "/api/(.*)",
       "destination": "https://resolveit-api.onrender.com/api/$1"
     },
-   
-    { 
-      "source": "/:path((?!.*\\..*).*)", 
-      "destination": "/index.html" 
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  
-  "publicDir": "dist"
+  ]
 }
