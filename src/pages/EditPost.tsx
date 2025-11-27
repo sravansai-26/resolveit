@@ -1,6 +1,7 @@
 import React, { useEffect, useState, ChangeEvent, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { url } from 'inspector';
 
 interface Issue {
   _id: string;
@@ -20,6 +21,12 @@ const categories = [
   'Public Transport',
   'Other'
 ];
+
+// ----------------------------------------------------------------------
+// ✅ CRITICAL FIX: Base URL for Deployed API
+// This constant pulls the live Render URL from the Vercel environment variable.
+// ----------------------------------------------------------------------
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function EditPost() {
   // CORRECTED LINE: Change 'postId' to 'id' to match the route parameter in App.tsx
@@ -47,8 +54,8 @@ export function EditPost() {
 
       try {
         const token = localStorage.getItem('token');
-        // CORRECTED LINE: Use 'id' instead of 'postId' in the API call
-        const response = await axios.get(`http://localhost:5000/api/issues/${id}`, {
+        // ✅ FIX 1: Use API_BASE_URL for fetching data
+        const response = await axios.get(`${API_BASE_URL}/api/issues/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = response.data.data; // Assuming your API returns { data: {...} }
@@ -62,12 +69,12 @@ export function EditPost() {
       } catch (err) {
         // Improved error logging for debugging
         console.error('Failed to fetch issue details:', err);
-        // Display a more specific error if possible
-        if (axios.isAxiosError(err) && err.response) {
-            setError(`Failed to load issue details: ${err.response.status} - ${err.response.data?.message || 'Server error'}`);
-        } else {
-            setError('Failed to load issue details. Please try again.');
-        }
+        // Display a more specific error if possible
+        if (axios.isAxiosError(err) && err.response) {
+            setError(`Failed to load issue details: ${err.response.status} - ${err.response.data?.message || 'Server error'}`);
+        } else {
+            setError('Failed to load issue details. Please try again.');
+        }
         setLoading(false);
       }
     }
@@ -121,8 +128,8 @@ export function EditPost() {
 
     try {
       const token = localStorage.getItem('token');
-      // CORRECTED LINE: Use 'id' instead of 'postId' for the PUT request as well
-      await axios.put(`http://localhost:5000/api/issues/${id}`, formData, {
+      // ✅ FIX 2: Use API_BASE_URL for updating data
+      await axios.put(`${API_BASE_URL}/api/issues/${id}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -245,7 +252,8 @@ export function EditPost() {
                 aria-label={`Existing media ${i + 1}`}
               >
                 <img
-                  src={url.startsWith('/uploads') ? `http://localhost:5000${url}` : url}
+                  // ✅ FIX 3: Use API_BASE_URL for media display
+                  src={url.startsWith('/uploads') ? `${API_BASE_URL}${url}` : url}
                   alt={`Existing media ${i + 1}`}
                   className="w-20 h-20 object-cover rounded border"
                 />
