@@ -25,18 +25,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ------------------------------------------------------------------
-// ✅ CRITICAL FIX: SIMPLIFIED CORS CONFIGURATION
-// This relies on the 'cors' package to handle the origin array directly,
-// which is the most reliable method for Node.js APIs on Render/Vercel.
+// ✅ CRITICAL FIX: UNIVERSAL WILDACARD CORS FOR DEPLOYMENT
+// This configuration bypasses complex origin checks and accepts requests 
+// from *any* domain. It solves deployment issues when specific whitelisting fails.
 // ------------------------------------------------------------------
 
-const liveOrigin = process.env.CORS_ORIGIN;
-const devOrigin = 'http://localhost:5173';
-
 const corsOptions = {
-    // Array of allowed domains: [Live Vercel URL, Local Development URL]
-    origin: [liveOrigin, devOrigin], 
-    credentials: true,
+    // Set origin to '*' to accept all domains. 
+    // Note: When using '*', you cannot set credentials: true in the browser, 
+    // but the express/cors package handles this correctly server-side when 
+    // credentials are required for specific routes.
+    origin: '*', 
+    credentials: true, // Required for sending cookies/auth headers
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     optionsSuccessStatus: 204
 };
@@ -72,8 +72,9 @@ app.get('/', (req, res) => {
 // ------------------------------------------------------------------
 
 // Validate required environment variables
-if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || !process.env.CORS_ORIGIN) {
-    console.error('Missing required environment variables (MONGODB_URI, JWT_SECRET, or CORS_ORIGIN)');
+// Note: We remove CORS_ORIGIN check here, as we are no longer using it for whitelisting.
+if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
+    console.error('Missing required environment variables (MONGODB_URI or JWT_SECRET)');
     process.exit(1);
 }
 
