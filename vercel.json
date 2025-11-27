@@ -1,3 +1,4 @@
+
 {
   "rewrites": [
     { 
@@ -5,12 +6,5 @@
       "destination": "/index.html" 
     }
   ],
-  "build": {
-    "env": {
-      "VITE_API_URL": "https://resolveit-api.onrender.com" 
-    
-    }
-  },
-  
-  "publicDir": "dist" 
+  "publicDir": "dist"
 }
