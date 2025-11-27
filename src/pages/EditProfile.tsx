@@ -3,10 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Save, User, Mail, Phone, MapPin, Camera, FileText } from 'lucide-react';
 import { useProfile } from '../context/ProfileContext';
 
-// ----------------------------------------------------------------------
-// ✅ CRITICAL FIX 1: Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
-// ----------------------------------------------------------------------
+// NOTE: We keep this constant because it is used for navigation (not shown here)
+// and other API calls, but we REMOVE its use in media display.
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function EditProfile() {
@@ -49,7 +47,7 @@ export function EditProfile() {
     }
 
     try {
-      // The API call happens inside this function. We still need to fix the hook next.
+      // The API call happens inside this function (updateProfile).
       await updateProfile(formData, avatarFile || undefined); 
       navigate('/profile');
     } catch (err: any) {
@@ -69,12 +67,13 @@ export function EditProfile() {
             <div className="relative">
               <img
                 // ----------------------------------------------------------
-                // ✅ CRITICAL FIX 2: Use API_BASE_URL for media display
+                // ✅ FINAL FIX: Use avatarPreview directly (now contains Cloudinary URL)
+                // We check if it starts with 'http' (Cloudinary URL) or 'blob:' (local preview)
                 // ----------------------------------------------------------
                 src={
-                  avatarPreview.startsWith('/uploads')
-                    ? `${API_BASE_URL}${avatarPreview}` // Replaces http://localhost:5000
-                    : avatarPreview
+                  avatarPreview.startsWith('http') || avatarPreview.startsWith('blob:')
+                    ? avatarPreview 
+                    : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200'
                 }
                 alt="Profile Avatar"
                 className="w-32 h-32 rounded-full object-cover"
@@ -232,6 +231,7 @@ export function EditProfile() {
           </div>
         </form>
       </div>
+      
     </div>
   );
 }

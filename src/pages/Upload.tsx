@@ -3,8 +3,7 @@ import { Upload as UploadIcon, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX 1: Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
+// ✅ CRITICAL FIX 1: Base URL for Deployed API (Needed for fetch call)
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -116,7 +115,7 @@ export function Upload() {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 
-      // ✅ CRITICAL FIX 2: Use API_BASE_URL for the API call
+      // ✅ CRITICAL FIX 2: Use API_BASE_URL for the API call (this is correct)
       const response = await fetch(`${API_BASE_URL}/api/issues/`, {
         method: "POST",
         headers: {

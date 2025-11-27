@@ -81,6 +81,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem('token') || sessionStorage.getItem('token');
   };
 
+  // Helper to correctly save user data to the appropriate storage
+  const saveUserToStorage = (userData: User) => {
+    const storageKey = localStorage.getItem('token') ? 'localStorage' : 'sessionStorage';
+    const storage = storageKey === 'localStorage' ? localStorage : sessionStorage;
+    storage.setItem('user', JSON.stringify(userData));
+  };
+
+
   // ==================== API Calls ====================
 
   const fetchProfile = async () => {
@@ -105,12 +113,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       if (res.ok && json.success && json.data) {
         setUser(json.data);
-        // Use session storage if present, otherwise local storage (maintains 'remember me' logic)
-        if (sessionStorage.getItem('token')) {
-          sessionStorage.setItem('user', JSON.stringify(json.data));
-        } else {
-          localStorage.setItem('user', JSON.stringify(json.data));
-        }
+        saveUserToStorage(json.data); // Use helper function
       } else {
         throw new Error(json.message || 'Failed to fetch profile.');
       }
@@ -226,13 +229,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       if (res.ok && json.success && json.data) {
         setUser(json.data);
-        // Use session storage if present, otherwise local storage (maintains 'remember me' logic)
-        const storageKey = localStorage.getItem('token') ? 'localStorage' : 'sessionStorage';
-        if (storageKey === 'localStorage') {
-          localStorage.setItem('user', JSON.stringify(json.data));
-        } else {
-          sessionStorage.setItem('user', JSON.stringify(json.data));
-        }
+        saveUserToStorage(json.data); // Use helper function
         alert('Profile updated successfully!');
       } else {
         throw new Error(json.message || 'Failed to update profile.');

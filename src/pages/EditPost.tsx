@@ -1,7 +1,7 @@
 import React, { useEffect, useState, ChangeEvent, FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { url } from 'inspector';
+// import { url } from 'inspector'; // REMOVED: Unused inspector import (Good practice cleanup)
 
 interface Issue {
   _id: string;
@@ -23,13 +23,11 @@ const categories = [
 ];
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX: Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
+// ✅ CRITICAL FIX: Base URL for Deployed API (Needed for API calls only)
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function EditPost() {
-  // CORRECTED LINE: Change 'postId' to 'id' to match the route parameter in App.tsx
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -45,7 +43,6 @@ export function EditPost() {
 
   useEffect(() => {
     async function fetchIssue() {
-      // Add a check to ensure 'id' is not undefined before fetching
       if (!id) {
         setError('Issue ID is missing.');
         setLoading(false);
@@ -54,22 +51,20 @@ export function EditPost() {
 
       try {
         const token = localStorage.getItem('token');
-        // ✅ FIX 1: Use API_BASE_URL for fetching data
+        // ✅ FIX 1: API call correctly uses API_BASE_URL
         const response = await axios.get(`${API_BASE_URL}/api/issues/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const data = response.data.data; // Assuming your API returns { data: {...} }
+        const data = response.data.data; 
         setTitle(data.title);
         setDescription(data.description);
         setCategory(data.category);
         setLocation(data.location);
-        setExistingMedia(data.media || []);
+        setExistingMedia(data.media || []); // This media array now contains full Cloudinary URLs
         setStatus(data.status);
         setLoading(false);
       } catch (err) {
-        // Improved error logging for debugging
         console.error('Failed to fetch issue details:', err);
-        // Display a more specific error if possible
         if (axios.isAxiosError(err) && err.response) {
             setError(`Failed to load issue details: ${err.response.status} - ${err.response.data?.message || 'Server error'}`);
         } else {
@@ -79,7 +74,7 @@ export function EditPost() {
       }
     }
     fetchIssue();
-  }, [id]); // Dependency array should be 'id'
+  }, [id]); 
 
   const onFieldChange =
     (setter: React.Dispatch<React.SetStateAction<any>>) =>
@@ -88,7 +83,6 @@ export function EditPost() {
       if (error) setError('');
     };
 
-  // Fix here: save files to a const and check before converting
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -128,17 +122,17 @@ export function EditPost() {
 
     try {
       const token = localStorage.getItem('token');
-      // ✅ FIX 2: Use API_BASE_URL for updating data
+      // ✅ FIX 2: API call correctly uses API_BASE_URL
       await axios.put(`${API_BASE_URL}/api/issues/${id}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
+          // 'Content-Type': 'multipart/form-data' is handled automatically by axios
         }
       });
       navigate('/profile');
     } catch (err) {
       setError('Failed to update issue');
-      console.error('Failed to update issue:', err); // More specific error logging
+      console.error('Failed to update issue:', err); 
     }
   }
 
@@ -252,8 +246,10 @@ export function EditPost() {
                 aria-label={`Existing media ${i + 1}`}
               >
                 <img
-                  // ✅ FIX 3: Use API_BASE_URL for media display
-                  src={url.startsWith('/uploads') ? `${API_BASE_URL}${url}` : url}
+                  // ----------------------------------------------------------
+                  // ✅ FIX 3: Clean up media display logic for Cloudinary
+                  // ----------------------------------------------------------
+                  src={url.startsWith('http') ? url : ''} // Use the full Cloudinary URL directly
                   alt={`Existing media ${i + 1}`}
                   className="w-20 h-20 object-cover rounded border"
                 />

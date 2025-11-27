@@ -4,19 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import { useProfile } from '../context/ProfileContext';
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX 1: Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
+// NOTE: We keep this constant because it is used for navigation (not shown here)
+// and could be used for other API calls, but we REMOVE its use in media display.
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function Profile() {
   const navigate = useNavigate();
-  // Destructure everything needed directly from the context, including toggleRepost
   const { user, issues, reposts, loading, error, deleteIssue, toggleRepost } = useProfile();
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false); // State for delete operation loading
-  const [unreposting, setUnreposting] = useState(false); // New state for un-repost loading
+  const [deleting, setDeleting] = useState(false); 
+  const [unreposting, setUnreposting] = useState(false); 
 
   // Consolidated loading and error states from context
   if (loading) {
@@ -56,15 +55,15 @@ export function Profile() {
   }
 
   // ----------------------------------------------------------------------
-  // ✅ CRITICAL FIX 2: Correct Avatar Source
-  // Avatar path needs the full API_BASE_URL prefix if it is an uploaded file.
+  // ✅ FIX 1: Correct Avatar Source - Use URL directly from DB
   // ----------------------------------------------------------------------
-  const avatarSrc = user.avatar?.startsWith('/uploads')
-    ? `${API_BASE_URL}${user.avatar}` // FIXED: Use API_BASE_URL
-    : user.avatar ||
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200';
+  const avatarSrc = user.avatar?.startsWith('http') 
+    ? user.avatar // Use the full Cloudinary URL if it exists
+    : user.avatar || // Fallback to whatever value is stored (e.g., empty string)
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200'; // Default image
 
-  // Handler for deleting your own original reports
+
+  // Handler for deleting your own original reports (Unchanged)
   const handleDeleteConfirmed = async (issueId: string) => {
     setDeleting(true);
     try {
@@ -78,13 +77,12 @@ export function Profile() {
     }
   };
 
-  // Handler for removing a repost
+  // Handler for removing a repost (Unchanged)
   const handleRemoveRepost = async (issueId: string) => {
     if (window.confirm('Are you sure you want to remove this repost?')) {
       setUnreposting(true);
       try {
         await toggleRepost(issueId);
-        // The repost will be automatically removed from the list via ProfileContext state update
       } catch (error) {
         alert('Failed to remove repost. Please try again.');
         console.error('Failed to remove repost:', error);
@@ -121,9 +119,10 @@ export function Profile() {
         {media.map((file, idx) => {
           const isVideo = file.match(/\.(mp4|webm|ogg)$/i);
           // ----------------------------------------------------------------------
-          // ✅ CRITICAL FIX 3: Correct Media Gallery Source
+          // ✅ FIX 2: Correct Media Gallery Source - Use URL directly from DB
+          // The URL in the 'file' variable is now the full Cloudinary URL.
           // ----------------------------------------------------------------------
-          const src = `${API_BASE_URL}${file}`; // FIXED: Use API_BASE_URL instead of http://localhost:5000
+          const src = file; // No prefixing needed!
           return isVideo ? (
             <video
               key={idx}

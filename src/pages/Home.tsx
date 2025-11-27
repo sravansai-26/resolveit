@@ -13,7 +13,7 @@ import {
 import "/src/home.css"; 
 
 // ----------------------------------------------------------------------
-// ✅ CRITICAL FIX 2: Base URL for Deployed API
+// ✅ CRITICAL FIX 2: Base URL for Deployed API (Needed for API calls)
 // ----------------------------------------------------------------------
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -114,11 +114,11 @@ export function Home() {
         throw new Error(json.message || "Failed to fetch issues");
       }
 
-      const issuesData = json.data as Issue[]; // Explicitly cast to Issue[]
+      const issuesData = json.data as Issue[]; 
       const loadedCurrentUserId = currentUserId || await getCurrentUserId(token);
 
       const initialUserVotes: Record<string, "upvote" | "downvote" | null> = {};
-      const issuesWithFlags = issuesData.map((issue) => { // Implicitly typed issue fixed
+      const issuesWithFlags = issuesData.map((issue) => { 
         const userHasVoted = issue.votes?.find(
           (vote) => loadedCurrentUserId && vote.user === loadedCurrentUserId
         );
@@ -330,9 +330,11 @@ export function Home() {
         endMessage={<p>No more issues to load.</p>}
       >
         {issues.map((issue) => {
-          // ✅ FIX 8: Use API_BASE_URL for media display
+          // ----------------------------------------------------------------------
+          // ✅ FIX 16: CLEANUP MEDIA DISPLAY (Use URL directly from DB)
+          // ----------------------------------------------------------------------
           const imageUrl = issue.media?.[0]
-            ? `${API_BASE_URL}${issue.media[0]}`
+            ? issue.media[0] // The database now returns the full Cloudinary URL
             : "";
           const totalVotes = issue.upvotes + issue.downvotes;
           const upvotePercent = totalVotes > 0 ? (issue.upvotes / totalVotes) * 100 : 0;
