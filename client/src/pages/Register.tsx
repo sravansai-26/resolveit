@@ -6,15 +6,13 @@ import { UserPlus } from 'lucide-react';
 // ----------------------------------------------------------
 // ✅ FIX 1: CHANGE CONTEXT IMPORT
 // Use the central AuthContext for login/logout state management
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 // ----------------------------------------------------------
 
-// ----------------------------------------------------------------------
-// Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
-// ----------------------------------------------------------------------
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+// ❌ REMOVED: VITE_API_URL (was causing undefined/... in production)
+// const API_BASE_URL = import.meta.env.VITE_API_URL;
 
+// ✅ We’ll use relative URLs so Vercel rewrites `/api/*` to Render backend.
 export function Register() {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -24,16 +22,16 @@ export function Register() {
     confirmPassword: '',
     phone: '',
     address: '',
-    agreeToTerms: false
+    agreeToTerms: false,
   });
   const [loading, setLoading] = useState(false); // New loading state for button
 
   const navigate = useNavigate();
-  
+
   // ----------------------------------------------------------
   // ✅ FIX 2: ACCESS AUTHENTICATION FUNCTIONS
   // Access the centralized login function
-  const { login } = useAuth(); 
+  const { login } = useAuth();
   // ----------------------------------------------------------
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,15 +46,15 @@ export function Register() {
       alert('You must agree to the terms and conditions.');
       return;
     }
-    
+
     setLoading(true);
 
     try {
-      // API call to register endpoint
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      // ✅ API call to register endpoint (relative URL so Vercel can rewrite to Render)
+      const response = await fetch(`/api/auth/register`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           firstName: formData.firstName,
@@ -64,35 +62,37 @@ export function Register() {
           email: formData.email,
           password: formData.password,
           phone: formData.phone,
-          address: formData.address
-        })
+          address: formData.address,
+        }),
       });
 
+      // If backend returns non-JSON (like HTML on 405), this will throw,
+      // and we’ll catch it in catch() below.
       const responseData = await response.json();
 
       if (response.ok && responseData.success) {
-        
         const { token, user } = responseData.data;
 
         // ----------------------------------------------------------
         // ✅ FIX 3: CENTRALIZED LOGIN CALL
         // Use the function from AuthContext to handle all storage and state updates.
         // Registration is usually treated as a persistent login (rememberMe=true)
-        login(token, user, true); 
+        login(token, user, true);
         // ----------------------------------------------------------
 
         alert('Account created successfully!');
-        
+
         // ----------------------------------------------------------
         // ✅ FIX 4: TARGETED REDIRECTION
         // Redirect to the dashboard/home page. Use { replace: true } for clean history.
         navigate('/dashboard', { replace: true });
         // ----------------------------------------------------------
-        
       } else {
         // Improved error handling for validation errors from backend
         if (responseData.errors && responseData.errors.length > 0) {
-          const errorMessages = responseData.errors.map((err: any) => err.msg).join('\n');
+          const errorMessages = responseData.errors
+            .map((err: any) => err.msg)
+            .join('\n');
           alert(`Validation failed:\n${errorMessages}`);
         } else {
           // Fallback for general server errors not tied to validation
@@ -102,12 +102,12 @@ export function Register() {
     } catch (error) {
       // General network or unexpected errors
       if (error instanceof Error) {
-        alert(`Connection Error: ${error.message}. Check if VITE_API_URL is correct.`);
+        alert(`Connection Error: ${error.message}. Please try again.`);
       } else {
         alert('Something went wrong!');
       }
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -116,14 +116,19 @@ export function Register() {
       <div className="bg-white rounded-lg shadow-md p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Create an Account</h1>
-          <p className="text-gray-600 mt-2">Join Resolveit and help improve your community</p>
+          <p className="text-gray-600 mt-2">
+            Join Resolveit and help improve your community
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* First Name */}
             <div>
-              <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="firstName"
+                className="block text-sm font-medium text-gray-700"
+              >
                 First Name
               </label>
               <input
@@ -132,7 +137,9 @@ export function Register() {
                 name="firstName"
                 required
                 value={formData.firstName}
-                onChange={e => setFormData({ ...formData, firstName: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, firstName: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your first name"
                 aria-describedby="firstNameHelp"
@@ -141,7 +148,10 @@ export function Register() {
 
             {/* Last Name */}
             <div>
-              <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="lastName"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Last Name
               </label>
               <input
@@ -150,7 +160,9 @@ export function Register() {
                 name="lastName"
                 required
                 value={formData.lastName}
-                onChange={e => setFormData({ ...formData, lastName: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastName: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your last name"
               />
@@ -158,7 +170,10 @@ export function Register() {
 
             {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Email Address
               </label>
               <input
@@ -167,7 +182,9 @@ export function Register() {
                 name="email"
                 required
                 value={formData.email}
-                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your email"
                 aria-describedby="emailHelp"
@@ -176,7 +193,10 @@ export function Register() {
 
             {/* Phone */}
             <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="phone"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Phone Number
               </label>
               <input
@@ -185,7 +205,9 @@ export function Register() {
                 name="phone"
                 required
                 value={formData.phone}
-                onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your phone number"
               />
@@ -193,7 +215,10 @@ export function Register() {
 
             {/* Address */}
             <div className="md:col-span-2">
-              <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="address"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Address
               </label>
               <input
@@ -202,7 +227,9 @@ export function Register() {
                 name="address"
                 required
                 value={formData.address}
-                onChange={e => setFormData({ ...formData, address: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your address"
               />
@@ -210,7 +237,10 @@ export function Register() {
 
             {/* Password */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Password
               </label>
               <input
@@ -219,7 +249,9 @@ export function Register() {
                 name="password"
                 required
                 value={formData.password}
-                onChange={e => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Create a password"
                 autoComplete="new-password"
@@ -228,7 +260,10 @@ export function Register() {
 
             {/* Confirm Password */}
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Confirm Password
               </label>
               <input
@@ -237,7 +272,9 @@ export function Register() {
                 name="confirmPassword"
                 required
                 value={formData.confirmPassword}
-                onChange={e => setFormData({ ...formData, confirmPassword: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, confirmPassword: e.target.value })
+                }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Confirm your password"
                 autoComplete="new-password"
@@ -253,17 +290,25 @@ export function Register() {
               name="agreeToTerms"
               required
               checked={formData.agreeToTerms}
-              onChange={e => setFormData({ ...formData, agreeToTerms: e.target.checked })}
+              onChange={(e) =>
+                setFormData({ ...formData, agreeToTerms: e.target.checked })
+              }
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               aria-describedby="termsHelp"
             />
-            <label htmlFor="agree-terms" className="ml-2 block text-sm text-gray-700">
+            <label
+              htmlFor="agree-terms"
+              className="ml-2 block text-sm text-gray-700"
+            >
               I agree to the{' '}
               <Link to="/terms" className="text-blue-600 hover:text-blue-800">
                 Terms and Conditions
               </Link>{' '}
               and{' '}
-              <Link to="/privacy" className="text-blue-600 hover:text-blue-800 ml-1">
+              <Link
+                to="/privacy"
+                className="text-blue-600 hover:text-blue-800 ml-1"
+              >
                 Privacy Policy
               </Link>
             </label>

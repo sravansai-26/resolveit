@@ -9,11 +9,11 @@ import { LogIn, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext'; 
 // ----------------------------------------------------------
 
-// ----------------------------------------------------------------------
-// Base URL for Deployed API
-// This constant pulls the live Render URL from the Vercel environment variable.
-// ----------------------------------------------------------------------
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+// ❌ REMOVE THIS — breaks production (undefined)
+// const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+// We will use relative URLs (Vercel rewrites -> Render backend)
+// ----------------------------------------------------------
 
 export function Login() {
   const [formData, setFormData] = useState({
@@ -21,15 +21,14 @@ export function Login() {
     password: '',
     rememberMe: false,
   });
-  const [loading, setLoading] = useState(false); // New loading state for button
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-  const location = useLocation(); // Get current location to check for redirects
-  
+  const location = useLocation();
+
   // ----------------------------------------------------------
-  // ✅ FIX 2: ACCESS AUTHENTICATION FUNCTIONS
-  // Access the centralized login function
-  const { login } = useAuth(); 
+  // ✅ FIX 2: ACCESS AUTH FUNCTIONS
+  const { login } = useAuth();
   // ----------------------------------------------------------
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,7 +36,14 @@ export function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      // ----------------------------------------------------------
+      // ❌ OLD (BROKEN):
+      // fetch(`${API_BASE_URL}/api/auth/login`)
+      //
+      // ✅ NEW (WORKING):
+      // Calls /api/auth/login → Vercel rewrites → Render backend
+      // ----------------------------------------------------------
+      const response = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -48,42 +54,39 @@ export function Login() {
         }),
       });
 
+      // If backend returns non-JSON (like HTML from 405), this can throw.
       const responseData = await response.json();
 
       if (response.ok && responseData.success) {
-        
         const { token, user } = responseData.data;
 
         // ----------------------------------------------------------
         // ✅ FIX 3: CENTRALIZED LOGIN CALL
-        // Use the function from AuthContext to handle all storage and state updates.
         login(token, user, formData.rememberMe);
         // ----------------------------------------------------------
 
         alert("Login successful!");
-        
+
         // ----------------------------------------------------------
-        // ✅ FIX 4: TARGETED REDIRECTION
-        // Redirect to the page the user was trying to access (if set by RequireAuth), 
-        // otherwise default to the /dashboard. Use { replace: true } for clean history.
-        // ----------------------------------------------------------
+        // 🚀 Redirect to protected page or dashboard        
         const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
         navigate(from, { replace: true });
-        
+        // ----------------------------------------------------------
+
       } else {
-        // Improved error handling for backend messages
         alert(responseData.message || "Login failed.");
-        setFormData((prev) => ({ ...prev, password: "" })); // Clear password on error
-        console.error("Login error:", responseData.message || responseData);
+        setFormData(prev => ({ ...prev, password: "" }));
+        console.error("Login error:", responseData);
       }
+
     } catch (error) {
       if (error instanceof Error) {
-        alert(`Connection Error: ${error.message}. Check if VITE_API_URL is correct.`);
-        setFormData((prev) => ({ ...prev, password: "" }));
-        console.error("Login error:", error.message);
+        alert(`Connection Error: ${error.message}`);
+        console.error("Login network error:", error.message);
       } else {
         alert("Unexpected error during login.");
       }
+      setFormData(prev => ({ ...prev, password: "" }));
     } finally {
       setLoading(false);
     }
@@ -108,11 +111,12 @@ export function Login() {
                 type="email"
                 id="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
                 className="pl-10 w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your email address"
                 required
-                title="Enter your email address"
               />
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             </div>
@@ -128,32 +132,38 @@ export function Login() {
                 type="password"
                 id="password"
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
                 className="pl-10 w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your password"
                 required
-                title="Enter your password"
               />
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             </div>
           </div>
 
-          {/* Remember Me & Forgot Password */}
+          {/* Remember Me */}
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <input
                 type="checkbox"
                 id="remember-me"
                 checked={formData.rememberMe}
-                onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, rememberMe: e.target.checked })
+                }
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                title="Remember me"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
                 Remember me
               </label>
             </div>
-            <Link to="/forgot-password" className="text-sm text-blue-600 hover:text-blue-800" title="Forgot password?">
+
+            <Link
+              to="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
               Forgot password?
             </Link>
           </div>
@@ -161,8 +171,7 @@ export function Login() {
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            title="Sign In"
+            className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             disabled={loading}
           >
             <LogIn size={20} />
@@ -173,7 +182,10 @@ export function Login() {
         {/* Sign Up Link */}
         <p className="mt-6 text-center text-sm text-gray-600">
           Don&apos;t have an account?{' '}
-          <Link to="/register" className="font-medium text-blue-600 hover:text-blue-800" title="Sign up now">
+          <Link
+            to="/register"
+            className="font-medium text-blue-600 hover:text-blue-800"
+          >
             Sign up now
           </Link>
         </p>
