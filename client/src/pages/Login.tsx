@@ -3,17 +3,14 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
+
 // ----------------------------------------------------------
-// ✅ FIX 1: CHANGE CONTEXT IMPORT
-// Use the central AuthContext for login/logout state management
-import { useAuth } from '../context/AuthContext'; 
+// ✅ Correct import path (your folder is "context")
+// ----------------------------------------------------------
+import { useAuth } from '../context/AuthContext';
 // ----------------------------------------------------------
 
-// ❌ REMOVE THIS — breaks production (undefined)
-// const API_BASE_URL = import.meta.env.VITE_API_URL;
-
-// We will use relative URLs (Vercel rewrites -> Render backend)
-// ----------------------------------------------------------
+// Using relative URLs so Vercel rewrites /api/* → Render backend
 
 export function Login() {
   const [formData, setFormData] = useState({
@@ -21,28 +18,22 @@ export function Login() {
     password: '',
     rememberMe: false,
   });
+
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
 
   // ----------------------------------------------------------
-  // ✅ FIX 2: ACCESS AUTH FUNCTIONS
-  const { login } = useAuth();
+  // Access AuthContext login function
   // ----------------------------------------------------------
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // ----------------------------------------------------------
-      // ❌ OLD (BROKEN):
-      // fetch(`${API_BASE_URL}/api/auth/login`)
-      //
-      // ✅ NEW (WORKING):
-      // Calls /api/auth/login → Vercel rewrites → Render backend
-      // ----------------------------------------------------------
       const response = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: {
@@ -54,31 +45,31 @@ export function Login() {
         }),
       });
 
-      // If backend returns non-JSON (like HTML from 405), this can throw.
       const responseData = await response.json();
 
       if (response.ok && responseData.success) {
         const { token, user } = responseData.data;
 
         // ----------------------------------------------------------
-        // ✅ FIX 3: CENTRALIZED LOGIN CALL
-        login(token, user, formData.rememberMe);
+        // Centralized login
         // ----------------------------------------------------------
+        login(token, user, formData.rememberMe);
 
         alert("Login successful!");
 
         // ----------------------------------------------------------
-        // 🚀 Redirect to protected page or dashboard        
-        const from = (location.state as { from?: Location })?.from?.pathname || "/dashboard";
-        navigate(from, { replace: true });
+        // Redirect to protected page OR dashboard
         // ----------------------------------------------------------
+        const state = location.state as { from?: { pathname?: string } } | null;
+        const from = state?.from?.pathname || "/dashboard";
+
+        navigate(from, { replace: true });
 
       } else {
         alert(responseData.message || "Login failed.");
         setFormData(prev => ({ ...prev, password: "" }));
         console.error("Login error:", responseData);
       }
-
     } catch (error) {
       if (error instanceof Error) {
         alert(`Connection Error: ${error.message}`);
@@ -101,6 +92,7 @@ export function Login() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          
           {/* Email Input */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">

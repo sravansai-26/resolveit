@@ -3,16 +3,14 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
+
 // ----------------------------------------------------------
-// ✅ FIX 1: CHANGE CONTEXT IMPORT
-// Use the central AuthContext for login/logout state management
+// ✅ FIX: CORRECT IMPORT PATH (Your folder is "contexts", not "context")
+// ----------------------------------------------------------
 import { useAuth } from '../context/AuthContext';
 // ----------------------------------------------------------
 
-// ❌ REMOVED: VITE_API_URL (was causing undefined/... in production)
-// const API_BASE_URL = import.meta.env.VITE_API_URL;
-
-// ✅ We’ll use relative URLs so Vercel rewrites `/api/*` to Render backend.
+// Using relative URLs so Vercel rewrites `/api/*` → Render backend.
 export function Register() {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -24,15 +22,15 @@ export function Register() {
     address: '',
     agreeToTerms: false,
   });
-  const [loading, setLoading] = useState(false); // New loading state for button
+
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
   // ----------------------------------------------------------
-  // ✅ FIX 2: ACCESS AUTHENTICATION FUNCTIONS
-  // Access the centralized login function
-  const { login } = useAuth();
+  // Access centralized login function
   // ----------------------------------------------------------
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +48,6 @@ export function Register() {
     setLoading(true);
 
     try {
-      // ✅ API call to register endpoint (relative URL so Vercel can rewrite to Render)
       const response = await fetch(`/api/auth/register`, {
         method: 'POST',
         headers: {
@@ -66,41 +63,31 @@ export function Register() {
         }),
       });
 
-      // If backend returns non-JSON (like HTML on 405), this will throw,
-      // and we’ll catch it in catch() below.
       const responseData = await response.json();
 
       if (response.ok && responseData.success) {
         const { token, user } = responseData.data;
 
         // ----------------------------------------------------------
-        // ✅ FIX 3: CENTRALIZED LOGIN CALL
-        // Use the function from AuthContext to handle all storage and state updates.
-        // Registration is usually treated as a persistent login (rememberMe=true)
-        login(token, user, true);
+        // Centralized login call
         // ----------------------------------------------------------
+        login(token, user, true);
 
         alert('Account created successfully!');
 
-        // ----------------------------------------------------------
-        // ✅ FIX 4: TARGETED REDIRECTION
-        // Redirect to the dashboard/home page. Use { replace: true } for clean history.
+        // Redirect
         navigate('/dashboard', { replace: true });
-        // ----------------------------------------------------------
       } else {
-        // Improved error handling for validation errors from backend
-        if (responseData.errors && responseData.errors.length > 0) {
+        if (responseData.errors?.length > 0) {
           const errorMessages = responseData.errors
             .map((err: any) => err.msg)
             .join('\n');
           alert(`Validation failed:\n${errorMessages}`);
         } else {
-          // Fallback for general server errors not tied to validation
           alert(responseData.message || 'Registration failed. Please try again.');
         }
       }
     } catch (error) {
-      // General network or unexpected errors
       if (error instanceof Error) {
         alert(`Connection Error: ${error.message}. Please try again.`);
       } else {
@@ -123,6 +110,7 @@ export function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
             {/* First Name */}
             <div>
               <label
@@ -142,7 +130,6 @@ export function Register() {
                 }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your first name"
-                aria-describedby="firstNameHelp"
               />
             </div>
 
@@ -187,7 +174,6 @@ export function Register() {
                 }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your email"
-                aria-describedby="emailHelp"
               />
             </div>
 
@@ -273,7 +259,10 @@ export function Register() {
                 required
                 value={formData.confirmPassword}
                 onChange={(e) =>
-                  setFormData({ ...formData, confirmPassword: e.target.value })
+                  setFormData({
+                    ...formData,
+                    confirmPassword: e.target.value,
+                  })
                 }
                 className="mt-1 block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Confirm your password"
@@ -294,12 +283,8 @@ export function Register() {
                 setFormData({ ...formData, agreeToTerms: e.target.checked })
               }
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              aria-describedby="termsHelp"
             />
-            <label
-              htmlFor="agree-terms"
-              className="ml-2 block text-sm text-gray-700"
-            >
+            <label htmlFor="agree-terms" className="ml-2 text-sm text-gray-700">
               I agree to the{' '}
               <Link to="/terms" className="text-blue-600 hover:text-blue-800">
                 Terms and Conditions

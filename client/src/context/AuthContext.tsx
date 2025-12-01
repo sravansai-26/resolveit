@@ -1,27 +1,20 @@
 // src/contexts/AuthContext.tsx
 
-import React, { 
-    createContext, 
-    useContext, 
-    useState, 
-    useEffect, 
-    ReactNode 
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    ReactNode
 } from 'react';
 import { User as ProfileUser } from './ProfileContext';
 
 // ======================================================================
-// 🚨 IMPORTANT FIX:
-// Removed VITE_API_URL entirely.
-// We now use *relative* API paths:
-//      /api/auth/login
-//      /api/auth/register
-//      /api/users/profile
-//
-// Vercel rewrites handle the backend automatically.
+// ✅ IMPORTANT: USE ABSOLUTE API URL (Render backend)
+// Vercel is frontend → Render is backend
 // ======================================================================
+const API_BASE_URL = import.meta.env.VITE_API_URL;  
 
-// API base is empty -> relative path
-const API_BASE_URL = "";  
 
 
 // ==================== Type Definitions ====================
@@ -37,9 +30,11 @@ interface AuthContextType {
 }
 
 
+
 // ==================== Context Setup ====================
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
 
 
 // ==================== Provider Component ====================
@@ -50,22 +45,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // 🔑 Get token from local/session storage
+
+    // 🔑 Retrieve token from storage
     const getToken = (): string | null => {
         return localStorage.getItem('token') || sessionStorage.getItem('token');
     };
 
-    // ❌ Clear auth data
+
+    // ❌ Clear ALL auth/session data
     const clearAuthData = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('user');
+
         setUser(null);
         setIsAuthenticated(false);
     };
 
-    // ✔ Called after login/registration
+
+    // ✔ Called after successful login
     const login = (token: string, userData: ProfileUser, rememberMe: boolean) => {
         const storage = rememberMe ? localStorage : sessionStorage;
 
@@ -77,22 +76,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(null);
     };
 
-    // ✔ Logout function
+
+    // ✔ Logout user
     const logout = () => {
         clearAuthData();
     };
 
 
-    // 📡 Fetch user profile (token validation)
+
+    // 📡 Validate token & fetch user profile
     const fetchUserProfile = async () => {
         const token = getToken();
         if (!token) return;
 
         try {
-            const res = await fetch(`/api/users/profile`, {
-                method: 'GET',
+            const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
+                method: "GET",
                 headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
             });
@@ -101,42 +102,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (res.ok && json.success && json.data) {
                 const userData: ProfileUser = json.data;
-                const storage = localStorage.getItem('token') ? localStorage : sessionStorage;
 
-                storage.setItem('user', JSON.stringify(userData));
+                const storage = localStorage.getItem('token')
+                    ? localStorage
+                    : sessionStorage;
+
+                storage.setItem("user", JSON.stringify(userData));
 
                 setUser(userData);
                 setIsAuthenticated(true);
             } else {
-                console.error('Failed to validate token:', json.message);
+                console.warn("Token invalid or expired:", json.message);
                 clearAuthData();
             }
+
         } catch (err) {
-            console.error('Network/profile fetch error:', err);
+            console.error("Profile fetch error:", err);
             clearAuthData();
         }
     };
+
 
 
     // ==================== Initial Load Effect ====================
 
     useEffect(() => {
         const token = getToken();
-        const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+        const storedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
 
         if (token && storedUser) {
             try {
-                const parsedUser = JSON.parse(storedUser);
+                const parsed = JSON.parse(storedUser);
 
-                if (parsedUser?._id) {
-                    setUser(parsedUser);
+                if (parsed?._id) {
+                    setUser(parsed);
                     setIsAuthenticated(true);
                 }
 
-                // Now validate token with backend
+                // Validate the token with backend
                 fetchUserProfile();
-            } catch (e) {
-                console.warn('Invalid user JSON. Clearing.', e);
+
+            } catch (error) {
+                console.warn("Stored user corrupted. Resetting.", error);
                 clearAuthData();
             }
         } else {
@@ -147,7 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
 
-    // ==================== Context Return ====================
+
+    // ==================== Return Context ====================
 
     const contextValue: AuthContextType = {
         user,
@@ -167,12 +175,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 
-// ==================== Hook for Using Context ====================
+
+// ==================== Hook ====================
 
 export function useAuth() {
     const context = useContext(AuthContext);
     if (!context) {
-        throw new Error('useAuth must be used within an AuthProvider');
+        throw new Error("useAuth must be used within an AuthProvider");
     }
     return context;
 }

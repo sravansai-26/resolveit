@@ -9,13 +9,7 @@ import {
   MessageCircle,
   Share2,
 } from "lucide-react";
-// FIX 1: Correct Import Syntax (Assuming 'home.css' is the file)
-import "/src/home.css"; 
-
-// ----------------------------------------------------------------------
-// ✅ CRITICAL FIX 2: Base URL for Deployed API (Needed for API calls)
-// ----------------------------------------------------------------------
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import "/src/home.css";
 
 // ==================== Type Definitions ====================
 interface User {
@@ -30,9 +24,9 @@ interface Vote {
 }
 
 interface Comment {
-  _id: string; 
+  _id: string;
   text: string;
-  user: User; 
+  user: User;
   createdAt: string;
 }
 
@@ -55,13 +49,10 @@ interface Issue {
   repostedBy?: string[];
 }
 
-// ==================== Component ====================
-
-// Define the correct type for the Issue state array setter
-type SetIssues = React.Dispatch<React.SetStateAction<Issue[]>>; 
-// Define the correct type for the UserVotes state setter
-type SetUserVotes = React.Dispatch<React.SetStateAction<Record<string, "upvote" | "downvote" | null>>>;
-
+type SetIssues = React.Dispatch<React.SetStateAction<Issue[]>>;
+type SetUserVotes = React.Dispatch<
+  React.SetStateAction<Record<string, "upvote" | "downvote" | null>>
+>;
 
 export function Home() {
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -69,16 +60,24 @@ export function Home() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ category: "", location: "" });
-  const [userVotes, setUserVotes] = useState<Record<string, "upvote" | "downvote" | null>>({});
-  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const [userVotes, setUserVotes] = useState<
+    Record<string, "upvote" | "downvote" | null>
+  >({});
+  const [commentTexts, setCommentTexts] = useState<
+    Record<string, string>
+  >({});
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+  // ============================================
+  // On Load
+  // ============================================
   useEffect(() => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
     setIsAuthenticated(Boolean(token));
     if (token) {
-      getCurrentUserId(token).then(id => setCurrentUserId(id));
+      getCurrentUserId(token).then((id) => setCurrentUserId(id));
     } else {
       setCurrentUserId(null);
     }
@@ -91,16 +90,21 @@ export function Home() {
     fetchIssues(1, true);
   }, [filters]);
 
+  // ============================================
+  // Fetch Issues
+  // ============================================
   const fetchIssues = async (pageNumber = 1, reset = false) => {
     setIsLoading(true);
     try {
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token") || "";
-      
-      // ✅ FIX 4: Use API_BASE_URL for the main issues fetch URL
-      const url = new URL(`${API_BASE_URL}/api/issues`);
-      
+      const token =
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+
+      const url = new URL(`/api/issues`, window.location.origin);
       url.searchParams.append("page", pageNumber.toString());
       url.searchParams.append("limit", "5");
+
       if (filters.category) url.searchParams.append("category", filters.category);
       if (filters.location) url.searchParams.append("location", filters.location);
 
@@ -114,32 +118,45 @@ export function Home() {
         throw new Error(json.message || "Failed to fetch issues");
       }
 
-      const issuesData = json.data as Issue[]; 
-      const loadedCurrentUserId = currentUserId || await getCurrentUserId(token);
+      const issuesData = json.data as Issue[];
+      const loadedCurrentUserId =
+        currentUserId || (await getCurrentUserId(token));
 
-      const initialUserVotes: Record<string, "upvote" | "downvote" | null> = {};
-      const issuesWithFlags = issuesData.map((issue) => { 
+      const initialUserVotes: Record<
+        string,
+        "upvote" | "downvote" | null
+      > = {};
+
+      const issuesWithFlags = issuesData.map((issue) => {
         const userHasVoted = issue.votes?.find(
-          (vote) => loadedCurrentUserId && vote.user === loadedCurrentUserId
+          (vote) =>
+            loadedCurrentUserId && vote.user === loadedCurrentUserId
         );
         if (userHasVoted) {
-          initialUserVotes[issue._id] = userHasVoted.isUpvote ? "upvote" : "downvote";
+          initialUserVotes[issue._id] = userHasVoted.isUpvote
+            ? "upvote"
+            : "downvote";
         } else {
           initialUserVotes[issue._id] = null;
         }
         return {
           ...issue,
-          repostedByUser: issue.repostedBy?.includes(loadedCurrentUserId as string),
+          repostedByUser: issue.repostedBy?.includes(
+            loadedCurrentUserId as string
+          ),
         };
       });
 
-      // FIX 5: Explicitly type the prev parameter
-      setUserVotes((prev: Record<string, "upvote" | "downvote" | null>) => ({ ...prev, ...initialUserVotes }));
-      
+      setUserVotes((prev) => ({
+        ...prev,
+        ...initialUserVotes,
+      }));
+
       if (issuesWithFlags.length < 5) setHasMore(false);
 
-      // FIX 6: Explicitly type the prev parameter
-      setIssues((prev: Issue[]) => (reset ? issuesWithFlags : [...prev, ...issuesWithFlags]));
+      setIssues((prev) =>
+        reset ? issuesWithFlags : [...prev, ...issuesWithFlags]
+      );
     } catch (err) {
       console.error("Error loading issues:", err);
       setHasMore(false);
@@ -148,31 +165,38 @@ export function Home() {
     }
   };
 
+  // ============================================
+  // Fetch Current User ID
+  // ============================================
   const getCurrentUserId = async (token: string): Promise<string | null> => {
     if (!token) return null;
     try {
-      // ✅ FIX 7: getCurrentUserId - Uses live URL
-      const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      const res = await fetch(`/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      // Assuming backend returns { user: { _id: '...' } }
-      return res.ok && json.user ? json.user._id : null; 
+      return res.ok && json.user ? json.user._id : null;
     } catch {
       return null;
     }
   };
 
+  // ============================================
+  // Voting
+  // ============================================
   const handleVote = async (issueId: string, isUpvote: boolean) => {
     if (!isAuthenticated) return alert("Please log in to vote.");
+
     const currentVote = userVotes[issueId] ?? null;
     const newVote = isUpvote ? "upvote" : "downvote";
     if (currentVote === newVote) return;
 
     try {
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token") || "";
-      // ✅ FIX 8: handleVote - Uses live URL
-      const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/vote`, {
+      const token =
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+      const res = await fetch(`/api/issues/${issueId}/vote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -182,27 +206,33 @@ export function Home() {
       });
 
       const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || "Vote failed");
+      if (!res.ok || !json.success) throw new Error(json.message);
 
-      // FIX 9: Explicitly type the prev parameter
-      setIssues((prev: Issue[]) => 
+      setIssues((prev) =>
         prev.map((issue) => (issue._id === issueId ? json.data : issue))
       );
-      // FIX 10: Explicitly type the prev parameter
-      setUserVotes((prev: Record<string, "upvote" | "downvote" | null>) => ({ ...prev, [issueId]: newVote }));
+      setUserVotes((prev) => ({
+        ...prev,
+        [issueId]: newVote,
+      }));
     } catch (err) {
-      alert("Error voting.");
       console.error(err);
+      alert("Error voting.");
     }
   };
 
+  // ============================================
+  // Repost
+  // ============================================
   const handleRepost = async (issue: Issue) => {
     if (!isAuthenticated) return alert("Please log in to repost.");
-    
+
     try {
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token") || "";
-      // ✅ FIX 11: handleRepost - Uses live URL
-      const res = await fetch(`${API_BASE_URL}/api/issues/${issue._id}/repost`, {
+      const token =
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+      const res = await fetch(`/api/issues/${issue._id}/repost`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -213,14 +243,13 @@ export function Home() {
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error("Repost failed");
 
-      // FIX 12: Explicitly type the prev parameter
-      setIssues((prev: Issue[]) =>
-        prev.map((i) => // Implicitly typed 'i' fixed by type-checking 'prev'
+      setIssues((prev) =>
+        prev.map((i) =>
           i._id === issue._id
             ? {
                 ...i,
-                repostCount: json.data.repostCount, 
-                repostedByUser: json.data.repostedByUser, 
+                repostCount: json.data.repostCount,
+                repostedByUser: json.data.repostedByUser,
               }
             : i
         )
@@ -230,9 +259,11 @@ export function Home() {
     }
   };
 
+  // ============================================
+  // Comments
+  // ============================================
   const handleCommentChange = (issueId: string, text: string) => {
-    // FIX 13: Explicitly type the prev parameter
-    setCommentTexts((prev: Record<string, string>) => ({ ...prev, [issueId]: text }));
+    setCommentTexts((prev) => ({ ...prev, [issueId]: text }));
   };
 
   const handleSubmitComment = async (issueId: string) => {
@@ -241,9 +272,11 @@ export function Home() {
     if (!text) return;
 
     try {
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token") || "";
-      // ✅ FIX 14: handleSubmitComment - Uses live URL
-      const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/comment`, {
+      const token =
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+      const res = await fetch(`/api/issues/${issueId}/comment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -251,30 +284,36 @@ export function Home() {
         },
         body: JSON.stringify({ text }),
       });
+
       const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message);
 
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Comment failed");
-      }
-
-      // FIX 15: Explicitly type the prev parameter
-      setIssues((prev: Issue[]) =>
-        prev.map((issue) => // Implicitly typed 'issue' fixed by type-checking 'prev'
+      setIssues((prev) =>
+        prev.map((issue) =>
           issue._id === issueId
-            ? { ...issue, comments: [...(issue.comments || []), json.comment] } 
+            ? {
+                ...issue,
+                comments: [...(issue.comments || []), json.comment],
+              }
             : issue
         )
       );
-      setCommentTexts((prev) => ({ ...prev, [issueId]: "" })); // Clear the input field
+
+      setCommentTexts((prev) => ({ ...prev, [issueId]: "" }));
     } catch (err) {
       console.error("Comment error:", err);
-      alert("Error submitting comment. See console for details.");
+      alert("Error submitting comment.");
     }
   };
 
+  // ============================================
+  // Utilities
+  // ============================================
   const handleShare = (issueId: string) => {
     const url = `${window.location.origin}/issues/${issueId}`;
-    navigator.clipboard.writeText(url).then(() => alert("Link copied to clipboard!"));
+    navigator.clipboard
+      .writeText(url)
+      .then(() => alert("Link copied to clipboard!"));
   };
 
   const formatDateTime = (dateStr: string) =>
@@ -286,21 +325,31 @@ export function Home() {
       minute: "2-digit",
     });
 
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className="home-container">
       <h1 className="home-title">Community Issues</h1>
 
       <div className="filter-controls">
+
+        {/* Accessible SELECT */}
+        <label htmlFor="filter-category" className="sr-only">
+          Filter by category
+        </label>
         <select
+          id="filter-category"
           value={filters.category}
-          onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+          onChange={(e) =>
+            setFilters({ ...filters, category: e.target.value })
+          }
           title="Filter by category"
         >
           <option value="">All Categories</option>
           <option value="Roads">Roads</option>
           <option value="Garbage">Garbage</option>
           <option value="Electricity">Electricity</option>
-           {/* Add other categories if you have them in your backend */}
           <option value="Road Infrastructure">Road Infrastructure</option>
           <option value="Sanitation">Sanitation</option>
           <option value="Public Safety">Public Safety</option>
@@ -309,10 +358,17 @@ export function Home() {
           <option value="Other">Other</option>
         </select>
 
+        {/* Accessible input */}
+        <label htmlFor="filter-location" className="sr-only">
+          Filter by location
+        </label>
         <input
+          id="filter-location"
           type="text"
           value={filters.location}
-          onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+          onChange={(e) =>
+            setFilters({ ...filters, location: e.target.value })
+          }
           placeholder="Filter by location"
           title="Filter by location"
         />
@@ -330,24 +386,26 @@ export function Home() {
         endMessage={<p>No more issues to load.</p>}
       >
         {issues.map((issue) => {
-          // ----------------------------------------------------------------------
-          // ✅ FIX 16: CLEANUP MEDIA DISPLAY (Use URL directly from DB)
-          // ----------------------------------------------------------------------
-          const imageUrl = issue.media?.[0]
-            ? issue.media[0] // The database now returns the full Cloudinary URL
-            : "";
+          const imageUrl = issue.media?.[0] ? issue.media[0] : "";
           const totalVotes = issue.upvotes + issue.downvotes;
-          const upvotePercent = totalVotes > 0 ? (issue.upvotes / totalVotes) * 100 : 0;
-          const downvotePercent = totalVotes > 0 ? (issue.downvotes / totalVotes) * 100 : 0;
+          const upvotePercent =
+            totalVotes > 0 ? (issue.upvotes / totalVotes) * 100 : 0;
+          const downvotePercent =
+            totalVotes > 0 ? (issue.downvotes / totalVotes) * 100 : 0;
 
           return (
             <div key={issue._id} className="issue-card">
               {imageUrl && (
-                <img src={imageUrl} alt={issue.title} className="issue-image" />
+                <img
+                  src={imageUrl}
+                  alt={issue.title}
+                  className="issue-image"
+                />
               )}
 
               <div className="issue-content">
                 <h2 className="issue-title">{issue.title}</h2>
+
                 <div className="issue-uploader">
                   Posted by:{" "}
                   <strong>
@@ -358,7 +416,7 @@ export function Home() {
                 </div>
 
                 <div className="issue-location">
-                  <MapPin size={16} /> {issue.location}
+                  <MapPin size={16} aria-hidden="true" /> {issue.location}
                 </div>
 
                 <div className="issue-date">
@@ -368,52 +426,76 @@ export function Home() {
                 <span className="issue-category">{issue.category}</span>
 
                 <div className="issue-votes">
+
+                  {/* Upvote */}
                   <button
                     onClick={() => handleVote(issue._id, true)}
-                    className={`vote-button upvote ${userVotes[issue._id] === "upvote" ? "active" : ""}`}
-                    title="Upvote"
+                    className={`vote-button upvote ${
+                      userVotes[issue._id] === "upvote" ? "active" : ""
+                    }`}
+                    aria-label="Upvote this issue"
+                    title="Upvote this issue"
                   >
-                    <ThumbsUp size={20} />
+                    <ThumbsUp size={20} aria-hidden="true" />
                     <span>{issue.upvotes}</span>
                   </button>
 
+                  {/* Downvote */}
                   <button
                     onClick={() => handleVote(issue._id, false)}
-                    className={`vote-button downvote ${userVotes[issue._id] === "downvote" ? "active" : ""}`}
-                    title="Downvote"
+                    className={`vote-button downvote ${
+                      userVotes[issue._id] === "downvote" ? "active" : ""
+                    }`}
+                    aria-label="Downvote this issue"
+                    title="Downvote this issue"
                   >
-                    <ThumbsDown size={20} />
+                    <ThumbsDown size={20} aria-hidden="true" />
                     <span>{issue.downvotes}</span>
                   </button>
 
+                  {/* Repost */}
                   <button
                     onClick={() => handleRepost(issue)}
-                    className={`vote-button repost ${issue.repostedByUser ? "active" : ""}`}
-                    title={issue.repostedByUser ? "Already reposted" : "Repost"}
+                    className={`vote-button repost ${
+                      issue.repostedByUser ? "active" : ""
+                    }`}
+                    aria-label={
+                      issue.repostedByUser
+                        ? "Already reposted"
+                        : "Repost this issue"
+                    }
+                    title={
+                      issue.repostedByUser
+                        ? "Already reposted"
+                        : "Repost this issue"
+                    }
                     disabled={issue.repostedByUser}
                   >
-                    <Repeat2 size={20} />
+                    <Repeat2 size={20} aria-hidden="true" />
                     <span>{issue.repostCount || 0}</span>
                   </button>
 
+                  {/* Share */}
                   <button
                     onClick={() => handleShare(issue._id)}
                     className="vote-button share"
-                    title="Share issue"
+                    aria-label="Share this issue"
+                    title="Share this issue"
                   >
-                    <Share2 size={20} />
+                    <Share2 size={20} aria-hidden="true" />
                   </button>
 
-                  <div className="comment-count">
-                    <MessageCircle size={18} /> {issue.comments?.length || 0}
+                  <div className="comment-count" aria-label="Number of comments">
+                    <MessageCircle size={18} aria-hidden="true" />{" "}
+                    {issue.comments?.length || 0}
                   </div>
                 </div>
 
-                <p className="issue-description">{issue.description}</p> {/* Added class for styling */}
+                <p className="issue-description">{issue.description}</p>
 
-                {/* Dynamic Progress Bar */}
+                {/* Progress Bar */}
                 <div
-                  className="progress-bar-container" // New class for the outer container
+                  className="progress-bar-container"
                   style={{
                     "--upvote-width": `${upvotePercent}%`,
                     "--downvote-width": `${downvotePercent}%`,
@@ -424,18 +506,29 @@ export function Home() {
                 </div>
 
                 {issue.emailSent && (
-                  <div className="reported-message">✓ Reported to authorities</div>
+                  <div
+                    className="reported-message"
+                    aria-label="Reported to authorities"
+                  >
+                    ✓ Reported to authorities
+                  </div>
                 )}
 
+                {/* Comments Section */}
                 <div className="comment-section">
-                  <h3 className="comments-title">Comments ({issue.comments?.length || 0})</h3>
-                  {issue.comments && issue.comments.length > 0 ? (
+                  <h3 className="comments-title">
+                    Comments ({issue.comments?.length || 0})
+                  </h3>
+
+                  {issue.comments?.length ? (
                     <div className="comments-list">
-                      {issue.comments.map((comment) => ( // Implicitly typed 'comment' fixed by type-checking
+                      {issue.comments.map((comment) => (
                         <div key={comment._id} className="comment-item">
                           <p className="comment-author">
                             <strong>
-                              {comment.user ? `${comment.user.firstName} ${comment.user.lastName}` : "Unknown"}
+                              {comment.user
+                                ? `${comment.user.firstName} ${comment.user.lastName}`
+                                : "Unknown"}
                             </strong>
                             <span className="comment-date">
                               - {formatDateTime(comment.createdAt)}
@@ -449,16 +542,28 @@ export function Home() {
                     <p className="no-comments">No comments yet. Be the first!</p>
                   )}
 
+                  {/* Add Comment */}
                   <div className="comment-input-area">
+                    <label
+                      htmlFor={`comment-${issue._id}`}
+                      className="sr-only"
+                    >
+                      Add a comment
+                    </label>
                     <textarea
+                      id={`comment-${issue._id}`}
                       value={commentTexts[issue._id] || ""}
-                      onChange={(e) => handleCommentChange(issue._id, e.target.value)}
+                      onChange={(e) =>
+                        handleCommentChange(issue._id, e.target.value)
+                      }
                       placeholder="Add a comment..."
-                      title="Comment on this issue"
-                      rows={2} // Make it slightly larger
+                      rows={2}
+                      title="Add a comment"
                     />
+
                     <button
                       onClick={() => handleSubmitComment(issue._id)}
+                      aria-label="Submit comment"
                       title="Submit comment"
                     >
                       Submit
