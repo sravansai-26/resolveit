@@ -1,33 +1,24 @@
-// src/firebase.js
+// src/firebase.js (FINAL PRODUCTION VERSION)
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-// Replace the placeholder values below with your actual Firebase project config.
-// These keys are public and safe to include in your client-side code.
 const firebaseConfig = {
-    apiKey: "AIzaSyCPKJ6LO2Mylk5d4CNqkXkKRQK7jnmoPs4", 
-    authDomain: "resolveit-project.firebaseapp.com",
-    projectId: "resolveit-project",
-    storageBucket: "resolveit-project.firebasestorage.app",
-    messagingSenderId: "509516392972",
-    appId: "1:509516392972:web:441432180c7a915c8e9c29",
-    measurementId: "G-S91L1D13HD" // Optional
+    // Reading public keys from Vercel Environment variables (VITE_ prefix required)
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// 1. Initialize Firebase
+// Initialize Firebase
+// This code remains the same, but now uses the dynamic config object
 const app = initializeApp(firebaseConfig);
-
-// 2. Export the Auth service instance
 export const auth = getAuth(app);
-
-// 3. Export the Google Auth Provider instance
 export const googleProvider = new GoogleAuthProvider(); 
 
-// Optional: If you need to enforce a specific language or setting:
-// googleProvider.setCustomParameters({
-//   prompt: 'select_account' // Forces account selection every time
-// });
-
-// This file is now complete and ready to be imported into your components 
-// (Login/Register) and your central Auth Context.
+// NOTE: You must commit and push this updated src/firebase.js file.
+// Vercel will then use the secrets you set in Step 1.
