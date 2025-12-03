@@ -5,77 +5,74 @@ import multer from 'multer';
 import User from '../models/User.js';
 import { auth } from '../middleware/auth.js';
 import cloudinary from '../config/cloudinary.js'; 
-import streamifier from 'streamifier'; // Required for buffer-to-stream upload
+import streamifier from 'streamifier'; 
 
 const router = express.Router();
 
 // -----------------------------------------------------------------------
-// ✅ STEP 1: Multer Memory Storage Configuration
+// ✅ STEP 1: Multer Memory Storage Configuration (For Avatars)
 // -----------------------------------------------------------------------
 const storage = multer.memoryStorage();
 
 const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter(req, file, cb) {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only JPG, PNG, and GIF images are allowed'));
-    }
-  }
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter(req, file, cb) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPG, PNG, and GIF images are allowed'));
+    }
+  }
 });
 
-// Helper to pick allowed user fields for update (Cleaned up)
+// Helper to pick allowed user fields for update
 const pickUserFields = (body) => {
-  const allowed = ['firstName', 'lastName', 'phone', 'address', 'bio'];
-  const updates = {};
-  for (const key of allowed) {
-    if (body[key] !== undefined) {
-      updates[key] = body[key];
-    }
-  }
-  return updates;
+  const allowed = ['firstName', 'lastName', 'phone', 'address', 'bio'];
+  const updates = {};
+  for (const key of allowed) {
+    if (body[key] !== undefined) {
+      updates[key] = body[key];
+    }
+  }
+  return updates;
 };
 
 // -----------------------------------------------------------------------
-// ✅ REFINED HELPER: Cloudinary Deletion
-// Extracts public ID from the URL and includes the folder prefix.
+// ✅ HELPER: Cloudinary Deletion for Avatars
 // -----------------------------------------------------------------------
 const getPublicIdFromUrl = (url) => {
-    // Splits URL by '/', finds the part after 'upload/', and removes file extension/version
+    // Extracts "resolveit_users/my_image_id"
     const regex = /\/v\d+\/resolveit_users\/(.+)\.\w+$/;
     const match = url.match(regex);
     if (match && match[1]) {
-        // Returns "resolveit_users/my_image_id"
         return `resolveit_users/${match[1]}`;
     }
     return null;
 };
 
 const deleteOldAvatar = async (avatarUrl) => {
-    // Only attempt deletion if the URL looks like a Cloudinary URL
-    if (avatarUrl && avatarUrl.includes('cloudinary')) {
+    if (avatarUrl && avatarUrl.includes('cloudinary')) {
         const publicId = getPublicIdFromUrl(avatarUrl);
         
         if (publicId) {
             await cloudinary.uploader.destroy(publicId).catch(err => {
-                console.warn("Failed to delete old avatar from Cloudinary:", publicId, err);
+                console.warn("Failed to delete old avatar from Cloudinary:", publicId, err);
             });
         }
-    }
+    }
 };
 
 // -----------------------------------------------------------------------
-// ✅ NEW HELPER: Cloudinary Uploader (Stream method)
+// ✅ HELPER: Cloudinary Uploader (Stream method for profile picture)
 // -----------------------------------------------------------------------
 const uploadToCloudinary = (file) => {
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
             {
                 folder: "resolveit_users",
-                resource_type: "image", // Avatar is always an image
+                resource_type: "image",
             },
             (error, result) => {
                 if (result) {
@@ -90,80 +87,92 @@ const uploadToCloudinary = (file) => {
 };
 
 
-// GET user profile (Unchanged)
-router.get('/profile', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id).select('-password');
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    res.json({ success: true, data: user });
-  } catch (error) {
-    console.error('Fetch profile error:', error);
-    res.status(500).json({ success: false, message: 'Error fetching profile' });
-  }
-});
-
-// Middleware wrapper for multer error handling on avatar upload (Unchanged)
+// Middleware wrapper for multer error handling on avatar upload
 const uploadAvatar = upload.single('avatar');
 
+
 // -----------------------------------------------------------------------
-// ✅ STEP 3 & 4: PUT update issue (Cloudinary Upload Logic)
+// ✅ 1. GET user profile (FETCH) — used by AuthContext
+// Endpoint: GET /api/users/profile
+// -----------------------------------------------------------------------
+router.get('/profile', auth, async (req, res) => {
+  try {
+    // Fetch user without explicitly selecting fields; the toJSON transform will remove 'password'
+    const user = await User.findById(req.user._id); 
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    // 🟢 CRITICAL FIX: Use user.toJSON() to include virtuals (fullName) and apply transforms
+    res.json({ success: true, data: user.toJSON() }); 
+  } catch (error) {
+    console.error('Fetch profile error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching profile' });
+  }
+});
+
+// -----------------------------------------------------------------------
+// ✅ 2. PUT update profile (UPDATE) — used by EditProfile.tsx
+// Endpoint: PUT /api/users/profile (Handles avatar upload)
 // -----------------------------------------------------------------------
 router.put(
-  '/profile',
-  auth,
-  (req, res, next) => {
-    uploadAvatar(req, res, (err) => {
-      if (err) {
-        return res.status(400).json({ success: false, message: err.message });
-      }
-      next();
-    });
-  },
-  async (req, res) => {
-    try {
-      const updates = pickUserFields(req.body);
-      const user = await User.findById(req.user._id); 
+  '/profile',
+  auth,
+  (req, res, next) => {
+    // Handle multer upload errors here
+    uploadAvatar(req, res, (err) => {
+      if (err) {
+        // Return clear error message for client display
+        return res.status(400).json({ success: false, message: err.message });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const updates = pickUserFields(req.body);
+      let user = await User.findById(req.user._id); 
 
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      
+      let newAvatarUrl = user.avatar; 
 
-      if (req.file) {
-        // A. Delete old avatar from Cloudinary
-        if (user.avatar) {
-          await deleteOldAvatar(user.avatar); // Attempt to delete previous avatar
-        }
+      if (req.file) {
+        // A. Delete old avatar from Cloudinary
+        if (user.avatar) {
+          await deleteOldAvatar(user.avatar);
+        }
 
-        // B. Upload new file to Cloudinary
-        const newAvatarUrl = await uploadToCloudinary(req.file);
-        
-        // C. Save the permanent Cloudinary URL to the database
-        updates.avatar = newAvatarUrl;
-      } else if (updates.avatar === '') {
-          // Special case: Frontend intentionally cleared the avatar field (optional feature)
-          // If the avatar field is set to an empty string in updates and no new file was uploaded,
-          // it means the user wants to remove their current avatar.
+        // B. Upload new file to Cloudinary
+        newAvatarUrl = await uploadToCloudinary(req.file);
+      } else if (updates.avatar === '') {
+          // Special case: Frontend intentionally cleared the avatar field (if supported)
           if (user.avatar) {
-              await deleteOldAvatar(user.avatar);
+            await deleteOldAvatar(user.avatar);
           }
-          updates.avatar = ''; // Save an empty string in the DB
+          newAvatarUrl = ''; // Clear the field
       }
 
+      // 3. Apply general field updates
+      Object.assign(user, updates);
+      
+      // 4. Update avatar field with the new URL or cleared state
+      user.avatar = newAvatarUrl;
+      
+      await user.save(); // Use save() to apply pre-save middleware and run validators
 
-      const updatedUser = await User.findByIdAndUpdate(
-        req.user._id,
-        updates,
-        { new: true, runValidators: true }
-      ).select('-password');
-
-      res.json({ success: true, data: updatedUser });
-    } catch (error) {
-      console.error('Update profile error:', error);
-      res.status(500).json({ success: false, message: 'Error updating profile' });
-    }
-  }
+      // 🟢 CRITICAL FIX: Use user.toJSON() for response consistency
+      res.json({ success: true, data: user.toJSON() }); 
+      
+    } catch (error) {
+      console.error('Update profile error:', error);
+      // More specific error handling for validation errors should be added here
+      res.status(500).json({ success: false, message: 'Error updating profile' });
+    }
+  }
 );
 
 export default router;

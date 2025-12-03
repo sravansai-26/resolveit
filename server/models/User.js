@@ -1,3 +1,4 @@
+// server/models/User.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -15,7 +16,7 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,
+    unique: true, // Critical for preventing duplicate accounts
     trim: true,
     lowercase: true,
     match: [/^\S+@\S+\.\S+$/, 'Please use a valid email address']
@@ -28,7 +29,7 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: true,
-    // Optional: Add regex validation if desired
+    // Add specific regex for 10-digit phone if needed: match: [/^\d{10}$/, 'Must be a 10-digit phone number']
   },
   address: {
     type: String,
@@ -38,6 +39,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // avatar stores the URL/path to the image (local path or Cloudinary URL)
   avatar: {
     type: String,
     default: ''
@@ -46,37 +48,46 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-});
+}, { timestamps: true }); // Added timestamps option for created/updated fields
 
-// Virtual property for full name
+// Virtual property for full name, returned to the client in JSON responses
 userSchema.virtual('fullName').get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
-// Make sure virtuals are included when converting to JSON
+// Make sure virtuals are included and transform response before saving
 userSchema.set('toJSON', {
   virtuals: true,
   transform: (doc, ret) => {
     delete ret.password;
+    delete ret.__v; // Clean up MongoDB version key
     return ret;
   }
 });
 
-// Hash password before saving
+// Middleware: Hash password before saving or updating
 userSchema.pre('save', async function(next) {
+  // Only hash if the password field has been modified
   if (!this.isModified('password')) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
-  } catch (error) {
+  } catch (error) { // Removed : any type annotation
     next(error);
   }
 });
 
-// Method to compare passwords
-userSchema.methods.comparePassword = async function(candidatePassword) {
+/**
+ * Instance method to compare a plain text password with the hashed password.
+ * @param candidatePassword - Plain text password from the login form.
+ */
+userSchema.methods.comparePassword = async function(candidatePassword) { // Removed type annotations
+  // Check if the current instance has a password to compare against
+  if (!this.password) return false;
+  
+  // Use bcrypt to compare the two passwords
   return bcrypt.compare(candidatePassword, this.password);
 };
 

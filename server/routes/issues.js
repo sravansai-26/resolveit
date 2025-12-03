@@ -3,18 +3,17 @@
 import express from 'express';
 import multer from 'multer';
 import Issue from '../models/Issue.js';
-import { auth } from '../middleware/auth.js';
-// Removed: fs, join, dirname, fileURLToPath as local storage is gone
-// import { sendEmailToAuthority } from '../utils/email.js'; // Keep if you use this later
+import { auth } from '../middleware/auth.js'; // Assuming middleware path is correct
 import cloudinary from '../config/cloudinary.js';
-import streamifier from 'streamifier'; // NEW: Required for stream-based upload (more robust)
-import { body, validationResult } from 'express-validator'; // Added for basic body validation
+import streamifier from 'streamifier';
+import { body, validationResult } from 'express-validator';
+// Assuming the path for email utility if it exists.
+// import { sendEmailToAuthority } from '../utils/email.js'; 
 
 const router = express.Router();
 
 // -----------------------------------------------------------------------
-// ✅ STEP 1: Multer Memory Storage Configuration
-// Multer stores the file buffer in memory, ready for Cloudinary.
+// ✅ STEP 1: Multer Memory Storage Configuration (Required for Cloudinary Streaming)
 // -----------------------------------------------------------------------
 const storage = multer.memoryStorage();
 
@@ -25,17 +24,15 @@ const upload = multer({
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
-      // Error handling for file type
       cb(new Error('Invalid file type, only images and videos allowed'));
     }
   },
 });
 
 // -----------------------------------------------------------------------
-// ✅ STEP 2: Cloudinary Uploader (Refined to use stream for better memory management)
+// ✅ STEP 2: Cloudinary Uploader (Stream-based)
 // -----------------------------------------------------------------------
 const uploadToCloudinary = (file) => {
-  // Using streamifier for more efficient upload from memory buffer:
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -62,10 +59,11 @@ const pickIssueFields = (body) => ({
   status: body.status,
 });
 
-// Helper function to populate issues
+// Helper function to populate issues (Used in multiple GET routes)
 const populateIssue = (query) => {
-  return query
-    .populate('user', '-password')
+  // Use a temporary variable for the query instance to allow chaining
+  let populatedQuery = query
+    .populate('user', 'firstName lastName _id')
     .populate({
       path: 'reposts',
       select: 'firstName lastName _id',
@@ -74,27 +72,31 @@ const populateIssue = (query) => {
       path: 'comments.user',
       select: 'firstName lastName _id',
     });
+    
+  return populatedQuery;
 };
 
 // Helper to convert an Issue document into the shape frontend expects
 const toIssueResponse = (issueDoc) => {
-  const issueObj = issueDoc.toObject();
+  // Use issueDoc.toObject({ virtuals: true }) to get a plain object including repostCount
+  const issueObj = issueDoc.toObject({ virtuals: true }); 
 
-  // Ensure votes array exists
-  issueObj.votes = issueObj.votes || [];
-
-  // Convert reposts (Mongo refs) into repostedBy (array of user IDs) and repostCount
-  const repostIds = (issueObj.reposts || []).map((u) =>
-    typeof u === 'string' ? u : u?._id?.toString()
-  );
-  issueObj.repostedBy = repostIds;
-  issueObj.repostCount = repostIds.length;
+  // Ensure repostedBy reflects the array of User IDs
+  issueObj.repostedBy = (issueObj.reposts || []).map(u => u?._id?.toString() || u.toString());
+  
+  // Clean up references that the frontend doesn't need
+  delete issueObj.reposts;
 
   return issueObj;
 };
 
+// =======================================================================
+// API ENDPOINTS
+// =======================================================================
+
+
 // -----------------------------------------------------------------------
-// ✅ GET all issues (PUBLIC) — used by Home.tsx
+// ✅ 1. GET all issues (PUBLIC) — Home.tsx (Paginated)
 // -----------------------------------------------------------------------
 router.get('/', async (req, res) => {
   try {
@@ -118,9 +120,10 @@ router.get('/', async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    issuesQuery = await populateIssue(issuesQuery);
+    issuesQuery = populateIssue(issuesQuery);
+    const issues = await issuesQuery; // Execute the query
 
-    const issuesWithFlags = issuesQuery.map((issue) => toIssueResponse(issue));
+    const issuesWithFlags = issues.map((issue) => toIssueResponse(issue));
 
     res.json({
       success: true,
@@ -136,14 +139,15 @@ router.get('/', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ GET my issues (AUTH) — used by ProfileContext.fetchIssues()
+// ✅ 2. GET my issues (AUTH) — ProfileContext.fetchIssues()
 // -----------------------------------------------------------------------
 router.get('/my', auth, async (req, res) => {
   try {
     let issuesQuery = Issue.find({ user: req.user._id }).sort({ createdAt: -1 });
-    issuesQuery = await populateIssue(issuesQuery);
+    issuesQuery = populateIssue(issuesQuery);
+    const issues = await issuesQuery;
 
-    const issuesWithFlags = issuesQuery.map((issue) => toIssueResponse(issue));
+    const issuesWithFlags = issues.map((issue) => toIssueResponse(issue));
     res.json({ success: true, data: issuesWithFlags });
   } catch (error) {
     console.error('Failed to fetch user issues:', error);
@@ -154,16 +158,17 @@ router.get('/my', auth, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ GET issues I reposted (AUTH) — used by ProfileContext.fetchReposts()
+// ✅ 3. GET issues I reposted (AUTH) — ProfileContext.fetchReposts()
 // -----------------------------------------------------------------------
 router.get('/reposts/me', auth, async (req, res) => {
   try {
     let issuesQuery = Issue.find({ reposts: req.user._id }).sort({
       createdAt: -1,
     });
-    issuesQuery = await populateIssue(issuesQuery);
+    issuesQuery = populateIssue(issuesQuery);
+    const issues = await issuesQuery;
 
-    const issuesWithFlags = issuesQuery.map((issue) => toIssueResponse(issue));
+    const issuesWithFlags = issues.map((issue) => toIssueResponse(issue));
     res.json({ success: true, data: issuesWithFlags });
   } catch (error) {
     console.error('Failed to fetch reposted issues:', error);
@@ -174,7 +179,7 @@ router.get('/reposts/me', auth, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ GET issue by ID (PUBLIC) — used by detail/edit view
+// ✅ 4. GET issue by ID (PUBLIC)
 // -----------------------------------------------------------------------
 router.get('/:id', async (req, res) => {
   try {
@@ -196,7 +201,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ STEP 3: POST create new issue (Upload to Cloudinary) — AUTH
+// ✅ 5. POST create new issue (Upload to Cloudinary) — AUTH
 // -----------------------------------------------------------------------
 router.post(
   '/',
@@ -212,7 +217,6 @@ router.post(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        // Note: Since we use memory storage, cleanup is automatic via GC.
         return res.status(400).json({
           success: false,
           message: 'Validation failed',
@@ -228,20 +232,16 @@ router.post(
         ...pickIssueFields(req.body),
         user: req.user._id,
         media: mediaLinks, // Store the permanent Cloudinary URLs
-        reposts: [],
-        comments: [],
-        votes: [],
-        upvotes: 0,
-        downvotes: 0,
-        emailSent: false,
+        // Other fields (reposts, comments, votes) default to empty arrays/0
       };
 
       const issue = new Issue(issueData);
       await issue.save();
 
-      await issue.populate('user', '-password');
+      // Repopulate for the response object
+      const populatedIssue = await populateIssue(Issue.findById(issue._id));
 
-      const issueObj = toIssueResponse(issue);
+      const issueObj = toIssueResponse(populatedIssue);
       res.status(201).json({ success: true, data: issueObj });
     } catch (error) {
       console.error('Create issue error:', error);
@@ -251,7 +251,7 @@ router.post(
 );
 
 // -----------------------------------------------------------------------
-// ✅ STEP 4: PUT update issue (Handle Cloudinary Media) — AUTH
+// ✅ 6. PUT update issue (Handle Cloudinary Media) — AUTH
 // -----------------------------------------------------------------------
 router.put(
   '/:id',
@@ -267,7 +267,7 @@ router.put(
     try {
       const { id } = req.params;
       const updatedFields = pickIssueFields(req.body);
-      const issue = await Issue.findById(id);
+      let issue = await Issue.findById(id);
 
       if (!issue) {
         return res
@@ -286,16 +286,13 @@ router.put(
         try {
           existingMedia = JSON.parse(req.body.existingMedia);
         } catch (e) {
-          console.warn(
-            'Could not parse existingMedia array from request body.',
-            e
-          );
+          console.warn('Could not parse existingMedia array from request body.', e);
         }
       }
 
       // 2. Cloudinary Deletion Check: files in DB not in the retained list
+      // ⚠️ ASSUMPTION: All media stored are Cloudinary URLs (starting with http)
       const mediaToDelete = issue.media.filter((filePath) => {
-        // Only delete media if it's a Cloudinary URL and not in the retained list
         return (
           filePath.startsWith('http') && !existingMedia.includes(filePath)
         );
@@ -303,10 +300,9 @@ router.put(
 
       const deletePromises = mediaToDelete.map(async (url) => {
         const urlParts = url.split('/');
-        const folderAndPublicId = urlParts
-          .slice(urlParts.length - 2)
-          .join('/');
-        const publicId = folderAndPublicId.split('.')[0]; // e.g., 'resolveit_issues/public_id_123'
+        // Extract public ID part: resolveit_issues/public_id_123.extension
+        const folderAndPublicId = urlParts.slice(urlParts.length - 2).join('/');
+        const publicId = folderAndPublicId.split('.')[0]; 
         await cloudinary.uploader.destroy(publicId);
       });
 
@@ -323,10 +319,12 @@ router.put(
 
       // 5. Save changes
       Object.assign(issue, updatedFields);
-      await issue.save();
+      issue = await issue.save(); // save and update reference
 
-      await populateIssue(issue);
-      const issueObj = toIssueResponse(issue);
+      // Repopulate for the response object
+      const populatedIssue = await populateIssue(Issue.findById(issue._id));
+
+      const issueObj = toIssueResponse(populatedIssue);
       res.json({ success: true, data: issueObj });
     } catch (error) {
       console.error('Update issue error:', error);
@@ -336,7 +334,7 @@ router.put(
 );
 
 // -----------------------------------------------------------------------
-// ✅ STEP 5: DELETE issue (Delete Media from Cloudinary) — AUTH
+// ✅ 7. DELETE issue (Delete Media from Cloudinary) — AUTH
 // -----------------------------------------------------------------------
 router.delete('/:id', auth, async (req, res) => {
   try {
@@ -375,13 +373,12 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ STEP 6: POST vote on an issue — AUTH
-//    Frontend: POST /api/issues/:id/vote { isUpvote: boolean }
+// ✅ 8. POST vote on an issue — AUTH (CRITICAL FIX: Added unvote logic)
 // -----------------------------------------------------------------------
 router.post('/:id/vote', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { isUpvote } = req.body;
+    const { isUpvote } = req.body; // isUpvote: true or false
 
     if (typeof isUpvote !== 'boolean') {
       return res
@@ -389,29 +386,40 @@ router.post('/:id/vote', auth, async (req, res) => {
         .json({ success: false, message: 'isUpvote must be boolean' });
     }
 
-    const issue = await Issue.findById(id);
+    let issue = await Issue.findById(id);
     if (!issue) {
       return res
         .status(404)
         .json({ success: false, message: 'Issue not found' });
     }
 
+    const userIdString = req.user._id.toString();
     issue.votes = issue.votes || [];
     issue.upvotes = issue.upvotes || 0;
     issue.downvotes = issue.downvotes || 0;
 
     const existingIndex = issue.votes.findIndex(
-      (v) => v.user.toString() === req.user._id.toString()
+      (v) => v.user.toString() === userIdString
     );
 
     if (existingIndex !== -1) {
-      // User already voted before
+      // User has an existing vote
       const existingVote = issue.votes[existingIndex];
 
       if (existingVote.isUpvote === isUpvote) {
-        // Same vote again — do nothing
+        // ❌ CRITICAL FIX: User is trying to vote the same way again (unvote)
+        
+        // Decrement the corresponding count
+        if (existingVote.isUpvote) {
+          issue.upvotes -= 1;
+        } else {
+          issue.downvotes -= 1;
+        }
+        
+        // Remove the vote object from the array
+        issue.votes.splice(existingIndex, 1);
       } else {
-        // Switch vote
+        // Switch vote (e.g., upvote -> downvote)
         if (existingVote.isUpvote) {
           issue.upvotes -= 1;
           issue.downvotes += 1;
@@ -419,7 +427,7 @@ router.post('/:id/vote', auth, async (req, res) => {
           issue.downvotes -= 1;
           issue.upvotes += 1;
         }
-        existingVote.isUpvote = isUpvote;
+        existingVote.isUpvote = isUpvote; // Update the vote type
         issue.votes[existingIndex] = existingVote;
       }
     } else {
@@ -435,10 +443,10 @@ router.post('/:id/vote', auth, async (req, res) => {
       }
     }
 
-    await issue.save();
-    await populateIssue(issue);
+    issue = await issue.save();
+    const populatedIssue = await populateIssue(Issue.findById(issue._id));
 
-    const issueObj = toIssueResponse(issue);
+    const issueObj = toIssueResponse(populatedIssue);
     res.json({ success: true, data: issueObj });
   } catch (error) {
     console.error('Vote issue error:', error);
@@ -447,10 +455,7 @@ router.post('/:id/vote', auth, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ STEP 7: POST repost / toggle repost — AUTH
-//    Frontend:
-//      - Home.tsx: POST /api/issues/:id/repost → expects data.repostCount, data.repostedByUser
-//      - ProfileContext.toggleRepost: same endpoint used to remove repost
+// ✅ 9. POST repost / toggle repost — AUTH
 // -----------------------------------------------------------------------
 router.post('/:id/repost', auth, async (req, res) => {
   try {
@@ -464,19 +469,19 @@ router.post('/:id/repost', auth, async (req, res) => {
     }
 
     issue.reposts = issue.reposts || [];
+    const userId = req.user._id;
 
+    // Check if user has already reposted
     const alreadyReposted = issue.reposts.some(
-      (u) => u.toString() === req.user._id.toString()
+      (u) => u.toString() === userId.toString()
     );
 
     if (alreadyReposted) {
       // Remove repost
-      issue.reposts = issue.reposts.filter(
-        (u) => u.toString() !== req.user._id.toString()
-      );
+      issue.reposts.pull(userId); // Mongoose pull method is cleaner than filter/splice
     } else {
       // Add repost
-      issue.reposts.push(req.user._id);
+      issue.reposts.push(userId);
     }
 
     await issue.save();
@@ -484,7 +489,7 @@ router.post('/:id/repost', auth, async (req, res) => {
     // Build response fields required by frontend
     const repostIds = issue.reposts.map((u) => u.toString());
     const repostCount = repostIds.length;
-    const repostedByUser = repostIds.includes(req.user._id.toString());
+    const repostedByUser = repostIds.includes(userId.toString());
 
     res.json({
       success: true,
@@ -502,9 +507,7 @@ router.post('/:id/repost', auth, async (req, res) => {
 });
 
 // -----------------------------------------------------------------------
-// ✅ STEP 8: POST comment on an issue — AUTH
-//    Frontend: POST /api/issues/:id/comment { text }
-//    Expects: { success: true, comment: savedComment }
+// ✅ 10. POST comment on an issue — AUTH
 // -----------------------------------------------------------------------
 router.post('/:id/comment', auth, async (req, res) => {
   try {
@@ -517,41 +520,44 @@ router.post('/:id/comment', auth, async (req, res) => {
         .json({ success: false, message: 'Comment text is required' });
     }
 
-    const issue = await Issue.findById(id);
+    let issue = await Issue.findById(id);
     if (!issue) {
       return res
         .status(404)
         .json({ success: false, message: 'Issue not found' });
     }
 
-    issue.comments = issue.comments || [];
-    issue.comments.push({
+    const newComment = {
       user: req.user._id,
       text: text.trim(),
       createdAt: new Date(),
-    });
+    };
+    
+    // Push the comment object to the array
+    issue.comments.push(newComment);
 
-    await issue.save();
+    issue = await issue.save(); // save and update reference
+
+    // Populate the user field of the *last added comment* for the immediate response
+    const savedCommentIndex = issue.comments.length - 1;
     await issue.populate({
-      path: 'comments.user',
+      path: `comments.${savedCommentIndex}.user`,
       select: 'firstName lastName _id',
     });
 
-    const savedComment =
-      issue.comments[issue.comments.length - 1];
+    // Extract the populated comment
+    const populatedComment = issue.comments[savedCommentIndex];
 
     res.json({
       success: true,
-      comment: savedComment,
+      data: {
+          comment: populatedComment, // 🟢 FIX: Return under a standard 'data' envelope
+      },
     });
   } catch (error) {
     console.error('Comment issue error:', error);
     res.status(500).json({ success: false, message: 'Error adding comment' });
   }
 });
-
-// -----------------------------------------------------------------------
-// Note: You may need to install streamifier (npm install streamifier)
-// -----------------------------------------------------------------------
 
 export default router;

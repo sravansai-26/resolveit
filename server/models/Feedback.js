@@ -1,3 +1,4 @@
+// server/models/Feedback.js
 import mongoose from 'mongoose';
 
 const feedbackSchema = new mongoose.Schema({
