@@ -6,13 +6,13 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 // Replace the placeholder values below with your actual Firebase project config.
 // These keys are public and safe to include in your client-side code.
 const firebaseConfig = {
-    apiKey: "YOUR_FIREBASE_API_KEY", 
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-    // measurementId: "G-XXXXXXXXXX" // Optional
+    apiKey: "AIzaSyCPKJ6LO2Mylk5d4CNqkXkKRQK7jnmoPs4", 
+    authDomain: "resolveit-project.firebaseapp.com",
+    projectId: "resolveit-project",
+    storageBucket: "resolveit-project.firebasestorage.app",
+    messagingSenderId: "509516392972",
+    appId: "1:509516392972:web:441432180c7a915c8e9c29",
+    measurementId: "G-S91L1D13HD" // Optional
 };
 
 // 1. Initialize Firebase

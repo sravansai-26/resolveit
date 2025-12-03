@@ -228,8 +228,6 @@ export function Register() {
                 >
                     <img src="/google-logo.svg" alt="Google" className="h-5 w-5" /> 
 
-[Image of Google Logo]
-
                     <span>Sign up with Google</span>
                 </button>
 

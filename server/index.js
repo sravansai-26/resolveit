@@ -3,29 +3,29 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
+// 🟢 CRITICAL FIX: Use the simple, direct 'dotenv/config' import 
+//    This ensures all variables are loaded into process.env before other imports or execution.
+import 'dotenv/config'; 
+
 // --- CONFIGURATION LOADING ---
+// NOTE: We keep these for other file path operations (like media uploads), but they are no longer used for dotenv.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-// Explicitly load .env from the same directory as this script
-dotenv.config({ path: join(__dirname, '.env') });
 
 // --- ROUTE IMPORTS ---
 import authRoutes from './routes/auth.js';
 import issueRoutes from './routes/issues.js';
 import userRoutes from './routes/users.js';
 import feedbackRoutes from './routes/feedback.js';
-// Removed auth import as the /api/auth/me logic is moved back to routes/auth.js
-// import { auth } from './middleware/auth.js'; 
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+// NOTE: The process.env.PORT is now guaranteed to be loaded here.
+const PORT = process.env.PORT || 5000; 
 
 // ------------------------------------------------------------------
 // CORS Configuration for Deployment Stability
@@ -54,7 +54,7 @@ if (process.env.NODE_ENV === 'development') {
 // MONGODB CONNECTION AND VALIDATION
 // ------------------------------------------------------------------
 
-// Validate required environment variables
+// Validate required environment variables (including the Firebase one, implicitly)
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
     console.error('Missing required environment variables (MONGODB_URI or JWT_SECRET)');
     process.exit(1);
@@ -76,7 +76,6 @@ app.get('/', (req, res) => {
 // ✅ API Routes (Consolidated)
 // ------------------------------------------------------------------
 
-// ❌ CRITICAL FIX: Removed the redundant /api/auth/me route and rely on routes/auth.js
 app.use('/api/auth', authRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/users', userRoutes);

@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
 import { auth } from '../middleware/auth.js'; 
-import admin from '../config/firebaseAdmin.js'; // 🟢 NEW: Import Firebase Admin SDK
+import * as admin from '../config/firebaseAdmin.js';
 
 const router = express.Router();
 
