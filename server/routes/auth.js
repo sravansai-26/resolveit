@@ -4,7 +4,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
-import authMiddleware from '../middleware/auth.js'; // 🟢 ASSUMED: We need a middleware file to protect routes
+import { auth } from '../middleware/auth.js'; // 🟢 CRITICAL FIX: Changed to Named Import
 
 const router = express.Router();
 
@@ -18,7 +18,6 @@ const getExpiryTimestamp = () => {
 };
 
 // Helper to pick allowed fields from req.body for user creation
-// Uses destructuring to safely pull required fields
 const pickUserFields = (body) => ({
     firstName: body.firstName,
     lastName: body.lastName,
@@ -26,7 +25,7 @@ const pickUserFields = (body) => ({
     password: body.password,
     phone: body.phone,
     address: body.address,
-    bio: body.bio, // Allow bio/avatar, model handles defaults if missing
+    bio: body.bio, 
     avatar: body.avatar
 });
 
@@ -36,7 +35,6 @@ const validateRegister = [
     body('lastName').trim().notEmpty().withMessage('Last name is required'),
     body('email').isEmail().withMessage('Valid email is required'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    // Note: isMobilePhone() can be restrictive globally. Consider adding local validation if needed.
     body('phone').trim().notEmpty().withMessage('Phone number is required'), 
     body('address').trim().notEmpty().withMessage('Address is required'),
     body('bio').optional().trim(),
@@ -78,16 +76,14 @@ router.post('/register', validateRegister, async (req, res) => {
 
         const { email } = req.body;
 
-        // Check if user exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
-            return res.status(409).json({ // 🟢 FIX: Use 409 Conflict status for resource clash
+            return res.status(409).json({ 
                 success: false,
                 message: 'User already exists with this email'
             });
         }
 
-        // Create user using whitelisted fields
         const userData = pickUserFields(req.body); 
         const user = new User(userData);
         await user.save();
@@ -100,7 +96,6 @@ router.post('/register', validateRegister, async (req, res) => {
             data: {
                 token,
                 expiresAt: expiryTimestamp,
-                // 🟢 CRITICAL FIX: Use user.toJSON() to ensure virtuals (fullName) and cleaned fields are returned
                 user: user.toJSON() 
             }
         });
@@ -117,7 +112,6 @@ router.post('/register', validateRegister, async (req, res) => {
 // 2. LOGIN (/api/auth/login)
 // ======================================================================
 // ⚠️ PRODUCTION WARNING: Implement a rate limiting middleware here (e.g., express-rate-limit)
-// to prevent brute-force attacks on passwords.
 router.post('/login', validateLogin, async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -132,7 +126,6 @@ router.post('/login', validateLogin, async (req, res) => {
         const { email, password } = req.body;
 
         const user = await User.findOne({ email });
-        // Use 401 for both email and password mismatch to prevent user enumeration
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -156,7 +149,6 @@ router.post('/login', validateLogin, async (req, res) => {
             data: {
                 token,
                 expiresAt: expiryTimestamp,
-                // 🟢 CRITICAL FIX: Use user.toJSON() to ensure virtuals (fullName) and cleaned fields are returned
                 user: user.toJSON() 
             }
         });
@@ -172,13 +164,12 @@ router.post('/login', validateLogin, async (req, res) => {
 
 // ======================================================================
 // 3. GET CURRENT USER PROFILE (/api/auth/me)
-// 🟢 CRITICAL FIX for AuthContext/RequireAuth to validate token on refresh (Objective 3)
+// 🟢 FIX: Uses the correctly imported 'auth' middleware
 // ======================================================================
-// This route is used by the client's AuthContext to check if a token is still valid.
-router.get('/me', authMiddleware, async (req, res) => {
+router.get('/me', auth, async (req, res) => {
     try {
-        // req.user is set by authMiddleware from the JWT payload
-        const user = await User.findById(req.user.userId);
+        // req.user is set by auth middleware
+        const user = await User.findById(req.user.userId); // Assuming req.user has been attached with {userId: '...'} by the middleware
 
         if (!user) {
             return res.status(404).json({
