@@ -1,17 +1,13 @@
 // src/pages/Login.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 
-// 🟢 NEW FIREBASE IMPORTS
 import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase'; // Import the configured Firebase auth instance and provider
+import { auth, googleProvider } from '../firebase';
 
-// ======================================================================
-// ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for consistency
-// ======================================================================
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function Login() {
@@ -21,7 +17,6 @@ export function Login() {
         rememberMe: false,
     });
 
-    // State for user feedback
     const [loading, setLoading] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [isError, setIsError] = useState(false);
@@ -29,98 +24,79 @@ export function Login() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Access AuthContext login function
-    const { login } = useAuth();
+    const { login, isAuthenticated, loading: authLoading } = useAuth();
 
-    // Helper for navigation after successful login (Manual or Google)
-    const handleSuccessfulAuth = (token: string, user: any, rememberMe: boolean) => {
-        login(token, user, rememberMe);
+    // ---------------------------
+    // 🔄 Navigation after auth
+    // ---------------------------
+    const redirectPath =
+        (location.state as { from?: { pathname?: string } } | null)?.from
+            ?.pathname || "/dashboard";
 
-        setFeedback("Login successful! Redirecting...");
-        setIsError(false);
+    useEffect(() => {
+        if (!authLoading && isAuthenticated) {
+            navigate(redirectPath, { replace: true });
+        }
+    }, [authLoading, isAuthenticated, navigate, redirectPath]);
 
-        const state = location.state as { from?: { pathname?: string } } | null;
-        const from = state?.from?.pathname || "/dashboard";
-
-        setTimeout(() => {
-            navigate(from, { replace: true });
-        }, 500);
-    };
-
+    // ---------------------------
+    // Form Change Handler
+    // ---------------------------
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData({
             ...formData,
             [name]: type === 'checkbox' ? checked : value,
         });
-        setFeedback(null); // Clear feedback on change
+        setFeedback(null);
         setIsError(false);
     };
 
-    // ======================================================================
-    // 🟢 NEW: GOOGLE SIGN-IN HANDLER
-    // ======================================================================
+    // ---------------------------
+    // Google Sign-In
+    // ---------------------------
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setFeedback(null);
         setIsError(false);
 
         try {
-            // 1. Authenticate with Firebase
             const result = await signInWithPopup(auth, googleProvider);
-            
-            // 2. Get the Firebase ID Token
-            const idToken = await result.user.getIdToken(); 
-            
-            setFeedback("Verifying Google token with server...");
+            const idToken = await result.user.getIdToken();
 
-            // 3. Send the ID Token to your custom server endpoint
+            setFeedback("Verifying Google token...");
+
             const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ idToken }),
             });
 
             if (!response.ok) {
-                // If the server rejects the token (e.g., internal error, user banned)
-                const errorData = await response.json().catch(() => ({ message: 'Server verification failed.' }));
-                throw new Error(errorData.message || `Google sign-in verification failed (Status: ${response.status}).`);
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || "Google verification failed");
             }
 
-            // 4. Handle success: Server responded with your custom JWT
-            const responseData = await response.json();
-            const { token, user } = responseData.data;
+            const data = await response.json();
+            const { token, user } = data.data;
 
-            // Use the shared success handler
-            handleSuccessfulAuth(token, user, true); // Always remember Google users
+            login(token, user, true);
 
-        } catch (error) {
-            let message = "An unknown error occurred during Google sign-in.";
-            if (error instanceof Error) {
-                message = error.message;
-            } else if (error && typeof error === 'object' && 'code' in error) {
-                 // Handle specific Firebase errors (e.g., popup closed)
-                if (error.code === 'auth/popup-closed-by-user') {
-                    message = "Sign-in cancelled by user.";
-                } else if (error.code === 'auth/network-request-failed') {
-                    message = "Network error. Please try again.";
-                }
-            }
-
-            console.error("Google Sign-In Error:", message, error);
-            setFeedback(message);
+            setFeedback("Google sign-in successful!");
+        } catch (error: any) {
+            let msg = "Google sign-in failed.";
+            if (error?.code === "auth/popup-closed-by-user") msg = "Popup closed.";
+            if (error?.code === "auth/network-request-failed") msg = "Network error.";
+            setFeedback(msg);
             setIsError(true);
-            setFormData(prev => ({ ...prev, password: "" })); // Clear password state just in case
         } finally {
             setLoading(false);
         }
     };
 
-    // ======================================================================
-    // EXISTING: MANUAL SUBMIT HANDLER
-    // ======================================================================
+    // ---------------------------
+    // Email/Password Login
+    // ---------------------------
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -128,181 +104,172 @@ export function Login() {
         setIsError(false);
 
         try {
-            // 🟢 CRITICAL FIX: Use the ABSOLUTE URL
             const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email: formData.email,
                     password: formData.password,
                 }),
             });
 
-            if (!response.ok) {
-                let errorData;
-                try {
-                    errorData = await response.json();
-                } catch (jsonError) {
-                    throw new Error(`Server error: Status ${response.status} (Non-JSON response).`);
-                }
+            const data = await response.json();
 
-                setFeedback(errorData.message || "Login failed. Check your credentials.");
+            if (!response.ok) {
                 setIsError(true);
-                setFormData(prev => ({ ...prev, password: "" }));
+                setFeedback(data.message || "Invalid credentials");
                 return;
             }
 
-            const responseData = await response.json();
+            const { token, user } = data.data;
 
-            if (responseData.success) {
-                const { token, user } = responseData.data;
-                // Use the shared success handler
-                handleSuccessfulAuth(token, user, formData.rememberMe); 
+            login(token, user, formData.rememberMe);
 
-            } else {
-                setFeedback(responseData.message || "Login failed unexpectedly.");
-                setIsError(true);
-            }
-
-        } catch (error) {
-            if (error instanceof Error) {
-                setFeedback(`Connection Error: ${error.message}. Please check your API status.`);
-                console.error("Login network error:", error.message);
-            } else {
-                setFeedback("An unknown error occurred during login.");
-            }
+            setFeedback("Login successful!");
+        } catch (err: any) {
             setIsError(true);
-            setFormData(prev => ({ ...prev, password: "" }));
+            setFeedback("Network error. Try again.");
         } finally {
             setLoading(false);
         }
     };
 
+    // ---------------------------
+    // RENDER
+    // ---------------------------
     return (
         <div className="max-w-md mx-auto mt-16">
             <div className="bg-white rounded-lg shadow-md p-8">
+
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Welcome Back to Resolveit</h1>
-                    <p className="text-gray-600 mt-2">Sign in to your Resolveit account</p>
+                    <h1 className="text-3xl font-bold text-gray-900">
+                        Welcome Back to Resolveit
+                    </h1>
+                    <p className="text-gray-600 mt-2">
+                        Sign in to your Resolveit account
+                    </p>
                 </div>
 
-                {/* Feedback Alert Section */}
                 {feedback && (
-                    <div className={`p-4 mb-4 text-sm rounded-lg ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`} role="alert">
+                    <div
+                        className={`p-4 mb-4 text-sm rounded-lg ${
+                            isError
+                                ? "bg-red-100 text-red-700"
+                                : "bg-green-100 text-green-700"
+                        }`}
+                        role="alert"
+                    >
                         {feedback}
                     </div>
                 )}
-                {/* End Feedback Alert Section */}
 
-                {/* 🚀 NEW: GOOGLE SIGN-IN BUTTON */}
+                {/* GOOGLE BUTTON */}
                 <button
                     onClick={handleGoogleSignIn}
                     type="button"
-                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 mb-6"
+                    aria-label="Sign in with Google"
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow text-sm bg-white border hover:bg-gray-100 mb-6"
                     disabled={loading}
                 >
-                    {/* 
-
-[Image of Google Logo]
- */}
-                    <img src="/google-logo.svg" alt="Google" className="h-5 w-5" /> 
+                    <img
+                        src="/google-logo.svg"
+                        alt="Google logo"
+                        className="h-5 w-5"
+                    />
                     <span>Sign in with Google</span>
                 </button>
 
                 {/* Divider */}
                 <div className="relative flex items-center mb-6">
                     <div className="flex-grow border-t border-gray-300"></div>
-                    <span className="flex-shrink mx-4 text-gray-400 text-sm">Or continue with</span>
+                    <span className="mx-4 text-gray-400 text-sm">Or</span>
                     <div className="flex-grow border-t border-gray-300"></div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    
-                    {/* Email Input */}
+
+                    {/* Email */}
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="email" className="block text-sm">
                             Email Address
                         </label>
-                        <div className="mt-1 relative">
+                        <div className="relative">
                             <input
-                                type="email"
                                 id="email"
-                                name="email" 
+                                type="email"
+                                name="email"
                                 value={formData.email}
                                 onChange={handleChange}
-                                className="pl-10 w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                                placeholder="Enter your email address"
+                                placeholder="Enter your email"
+                                aria-label="Email"
                                 required
+                                className="pl-10 w-full rounded-lg border"
                             />
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
                         </div>
                     </div>
 
-                    {/* Password Input */}
+                    {/* Password */}
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="password" className="block text-sm">
                             Password
                         </label>
-                        <div className="mt-1 relative">
+                        <div className="relative">
                             <input
-                                type="password"
                                 id="password"
-                                name="password" 
+                                type="password"
+                                name="password"
                                 value={formData.password}
                                 onChange={handleChange}
-                                className="pl-10 w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                                 placeholder="Enter your password"
+                                aria-label="Password"
                                 required
+                                className="pl-10 w-full rounded-lg border"
                             />
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
                         </div>
                     </div>
 
                     {/* Remember Me */}
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center">
+                        <label className="flex items-center">
                             <input
                                 type="checkbox"
-                                id="remember-me"
-                                name="rememberMe" 
+                                id="rememberMe"
+                                name="rememberMe"
                                 checked={formData.rememberMe}
                                 onChange={handleChange}
-                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                aria-label="Remember me"
+                                className="mr-2"
                             />
-                            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                                Remember me
-                            </label>
-                        </div>
+                            Remember me
+                        </label>
 
                         <Link
                             to="/forgot-password"
-                            className="text-sm text-blue-600 hover:text-blue-800"
+                            className="text-sm text-blue-600"
                         >
                             Forgot password?
                         </Link>
                     </div>
 
-                    {/* Submit Button (Manual) */}
+                    {/* Submit */}
                     <button
                         type="submit"
-                        className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                         disabled={loading}
+                        aria-label="Sign in"
+                        className="w-full flex items-center justify-center bg-blue-600 text-white rounded-lg py-2"
                     >
-                        <LogIn size={20} />
-                        <span>{loading ? 'Signing In...' : 'Sign In'}</span>
+                        <LogIn size={20} className="mr-2" />
+                        {loading ? "Signing in..." : "Sign In"}
                     </button>
                 </form>
 
-                {/* Sign Up Link */}
-                <p className="mt-6 text-center text-sm text-gray-600">
-                    Don&apos;t have an account?{' '}
-                    <Link
-                        to="/register"
-                        className="font-medium text-blue-600 hover:text-blue-800"
-                    >
-                        Sign up now
+                {/* Sign Up */}
+                <p className="text-center mt-6 text-sm">
+                    Don’t have an account?{" "}
+                    <Link to="/register" className="text-blue-600">
+                        Sign up
                     </Link>
                 </p>
             </div>
