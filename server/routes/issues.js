@@ -7,8 +7,7 @@ import { auth } from '../middleware/auth.js'; // Assuming middleware path is cor
 import cloudinary from '../config/cloudinary.js';
 import streamifier from 'streamifier';
 import { body, validationResult } from 'express-validator';
-// Assuming the path for email utility if it exists.
-// import { sendEmailToAuthority } from '../utils/email.js'; 
+import { sendEmailToAuthority } from '../utils/email.js'; // Assuming this utility is ready
 
 const router = express.Router();
 
@@ -61,8 +60,8 @@ const pickIssueFields = (body) => ({
 
 // Helper function to populate issues (Used in multiple GET routes)
 const populateIssue = (query) => {
-  // Use a temporary variable for the query instance to allow chaining
-  let populatedQuery = query
+  // 🟢 CRITICAL FIX IMPLEMENTED: Ensure the query object is the one returned from the chain
+  return query
     .populate('user', 'firstName lastName _id')
     .populate({
       path: 'reposts',
@@ -72,8 +71,6 @@ const populateIssue = (query) => {
       path: 'comments.user',
       select: 'firstName lastName _id',
     });
-    
-  return populatedQuery;
 };
 
 // Helper to convert an Issue document into the shape frontend expects
@@ -237,6 +234,10 @@ router.post(
 
       const issue = new Issue(issueData);
       await issue.save();
+      
+      // ⚠️ CRITICAL STEP 5.1: Check if the issue qualifies to send an email report
+      // You should add logic here to determine if the report should be sent immediately.
+      // E.g., if (issue.category !== 'Other' && issue.category) { await sendEmailToAuthority(issue); }
 
       // Repopulate for the response object
       const populatedIssue = await populateIssue(Issue.findById(issue._id));
@@ -291,7 +292,6 @@ router.put(
       }
 
       // 2. Cloudinary Deletion Check: files in DB not in the retained list
-      // ⚠️ ASSUMPTION: All media stored are Cloudinary URLs (starting with http)
       const mediaToDelete = issue.media.filter((filePath) => {
         return (
           filePath.startsWith('http') && !existingMedia.includes(filePath)
@@ -300,7 +300,6 @@ router.put(
 
       const deletePromises = mediaToDelete.map(async (url) => {
         const urlParts = url.split('/');
-        // Extract public ID part: resolveit_issues/public_id_123.extension
         const folderAndPublicId = urlParts.slice(urlParts.length - 2).join('/');
         const publicId = folderAndPublicId.split('.')[0]; 
         await cloudinary.uploader.destroy(publicId);
@@ -407,16 +406,14 @@ router.post('/:id/vote', auth, async (req, res) => {
       const existingVote = issue.votes[existingIndex];
 
       if (existingVote.isUpvote === isUpvote) {
-        // ❌ CRITICAL FIX: User is trying to vote the same way again (unvote)
+        // ❌ User is trying to vote the same way again (unvote)
         
-        // Decrement the corresponding count
         if (existingVote.isUpvote) {
           issue.upvotes -= 1;
         } else {
           issue.downvotes -= 1;
         }
         
-        // Remove the vote object from the array
         issue.votes.splice(existingIndex, 1);
       } else {
         // Switch vote (e.g., upvote -> downvote)
@@ -444,7 +441,8 @@ router.post('/:id/vote', auth, async (req, res) => {
     }
 
     issue = await issue.save();
-    const populatedIssue = await populateIssue(Issue.findById(issue._id));
+    // 🟢 FIX: Call populateIssue on the Mongoose Query object
+    const populatedIssue = await populateIssue(Issue.findById(issue._id)); 
 
     const issueObj = toIssueResponse(populatedIssue);
     res.json({ success: true, data: issueObj });
@@ -551,7 +549,7 @@ router.post('/:id/comment', auth, async (req, res) => {
     res.json({
       success: true,
       data: {
-          comment: populatedComment, // 🟢 FIX: Return under a standard 'data' envelope
+          comment: populatedComment, // Return under a standard 'data' envelope
       },
     });
   } catch (error) {
