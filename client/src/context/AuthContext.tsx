@@ -11,8 +11,12 @@ import React, {
 // Assuming ProfileUser is defined in ProfileContext.tsx or imported globally
 import { User as ProfileUser } from './ProfileContext'; 
 
+// 🟢 FIREBASE IMPORTS
+import { signOut as firebaseSignOut } from 'firebase/auth'; 
+import { auth } from '../firebase'; // Import the initialized Firebase auth instance
+
 // ======================================================================
-// ✅ ARCHITECTURE: VITE_API_URL (Option B) - STICKING TO THIS.
+// CONFIGURATION
 // ======================================================================
 // Use the base URL defined in the client's .env file
 const API_BASE_URL = import.meta.env.VITE_API_URL; 
@@ -26,7 +30,6 @@ interface AuthContextType {
     error: string | null;
     login: (token: string, userData: ProfileUser, rememberMe: boolean) => void;
     logout: () => void;
-    // We only need the async function exposed if other components need to trigger a profile refresh manually.
     fetchUserProfile: () => Promise<void>; 
 }
 
@@ -39,7 +42,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<ProfileUser | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    // Initialize loading to true so RequireAuth waits for server validation
     const [loading, setLoading] = useState(true); 
     const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const storage = rememberMe ? localStorage : sessionStorage;
 
         storage.setItem('token', token);
-        // Ensure user data is always stored
         storage.setItem('user', JSON.stringify(userData)); 
 
         setUser(userData);
@@ -72,13 +73,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(null);
     };
 
-    // ✔ Logout user
-    const logout = () => {
+    // ------------------------------------
+    // ✔ Logout user (FINAL IMPLEMENTATION)
+    // ------------------------------------
+    const logout = useCallback(async () => {
+        // 1. Attempt Firebase sign out (for users who logged in via Google)
+        try {
+            if (auth) {
+                await firebaseSignOut(auth); 
+                console.log("Firebase session cleared successfully.");
+            }
+        } catch (error) {
+            console.warn("Firebase sign out failed, but proceeding with app logout:", error);
+        }
+        
+        // 2. Clear JWT tokens and local state
         clearAuthData();
-    };
+        
+        // 3. 🟢 UNCOMMENTED: Signal server to clear any HTTP-only cookies/sessions
+        try {
+            await fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST' });
+            console.log("Server logout signal sent.");
+        } catch(e) {
+            console.error("Failed to signal server logout:", e);
+        }
+        
+    }, [API_BASE_URL]);
 
     // 📡 Validate token & fetch user profile
-    // Wrapped in useCallback to prevent unnecessary re-renders/warnings in effects
     const fetchUserProfile = useCallback(async () => {
         const token = getToken();
         if (!token) return;
@@ -88,7 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
-                    // Fix: Ensure the token is always sent in the correct Authorization header
                     Authorization: `Bearer ${token}`, 
                 },
             });
@@ -104,32 +125,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (res.ok && json.success && json.data) {
                 const userData: ProfileUser = json.data;
 
-                // Update storage with fresh user data (optional, but good practice)
                 const storage = localStorage.getItem('token') ? localStorage : sessionStorage;
                 storage.setItem("user", JSON.stringify(userData));
 
                 setUser(userData);
                 setIsAuthenticated(true);
             } else {
-                // Generic failure, likely token expired or server error
                 console.warn("Token validation failed:", json.message || "Unknown error");
                 clearAuthData();
             }
 
         } catch (err) {
-            // Network error (Server down, failed to construct URL)
             console.error("Profile fetch error:", err);
             setError("Could not connect to the API server.");
             clearAuthData();
         } 
-        // Note: We don't call setLoading(false) here, we do it in the main effect.
-    }, []);
+    }, [API_BASE_URL]);
 
 
-    // ==================== Initial Load Effect (Centralized Logic) ====================
+    // ==================== Initial Load Effect ====================
 
     useEffect(() => {
-        let isMounted = true; // Cleanup flag
+        let isMounted = true; 
 
         const initializeAuth = async () => {
             const token = getToken();
@@ -140,12 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     const parsedUser = JSON.parse(storedUser);
 
                     if (parsedUser?._id && isMounted) {
-                        // Set basic state based on stored data (improves perceived speed)
+                        // Set basic state based on stored data (perceived speed)
                         setUser(parsedUser);
                         setIsAuthenticated(true);
                     }
                     
-                    // CRITICAL: Validate the token with backend to confirm session is still active
+                    // Validate the token with backend to confirm session is still active
                     await fetchUserProfile(); 
 
                 } catch (error) {
@@ -153,11 +170,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     clearAuthData();
                 }
             } else {
-                // No token found, ensure state is clean
                 clearAuthData();
             }
 
-            // CRITICAL FIX: Only set loading to false AFTER the async check is done
+            // Only set loading to false AFTER the async check is done
             if (isMounted) { 
                 setLoading(false); 
             }
@@ -170,8 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isMounted = false;
         };
 
-    }, [fetchUserProfile]); // fetchUserProfile is a dependency because it's used inside the effect
-
+    }, [fetchUserProfile, API_BASE_URL]); 
 
     // ==================== Return Context ====================
 

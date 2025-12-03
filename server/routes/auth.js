@@ -4,7 +4,8 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
-import { auth } from '../middleware/auth.js'; // 🟢 CRITICAL FIX: Changed to Named Import
+import { auth } from '../middleware/auth.js'; 
+import admin from '../config/firebaseAdmin.js'; // 🟢 NEW: Import Firebase Admin SDK
 
 const router = express.Router();
 
@@ -169,7 +170,7 @@ router.post('/login', validateLogin, async (req, res) => {
 router.get('/me', auth, async (req, res) => {
     try {
         // req.user is set by auth middleware
-        const user = await User.findById(req.user.userId); // Assuming req.user has been attached with {userId: '...'} by the middleware
+        const user = await User.findById(req.user.userId); 
 
         if (!user) {
             return res.status(404).json({
@@ -191,6 +192,83 @@ router.get('/me', auth, async (req, res) => {
             message: 'Internal server error'
         });
     }
+});
+
+// ======================================================================
+// 4. GOOGLE AUTHENTICATION (/api/auth/google) 🚀 NEW ROUTE
+// Handles both Google Sign-Up and Sign-In using Firebase Token Verification
+// ======================================================================
+router.post('/google', async (req, res) => {
+    const { idToken } = req.body;
+    
+    if (!idToken) {
+        return res.status(400).json({ success: false, message: 'Missing Firebase ID token.' });
+    }
+
+    // Check if Firebase Admin SDK is initialized based on the imported 'admin' object
+    if (!admin.apps.length) { 
+        console.error("Firebase Admin SDK not initialized. Check FIREBASE_SERVICE_ACCOUNT variable.");
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Server Error: Google Auth service is unavailable.' 
+        });
+    }
+
+    try {
+        // 1. Verify the ID Token with Firebase Admin SDK 
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const { email, name, picture } = decodedToken;
+
+        // 2. Check if user exists in MongoDB
+        let user = await User.findOne({ email });
+
+        if (!user) {
+            // 3. NEW USER (Sign-Up): Create a new user record using Google data
+            user = new User({
+                email,
+                // Attempt to parse first and last name from the full name
+                firstName: name ? name.split(' ')[0] : 'Google', 
+                lastName: name ? name.split(' ').slice(1).join(' ') : 'User',
+                avatar: picture, 
+                // NOTE: Password, phone, address, etc., will be missing. 
+                // This user is considered Google-authenticated.
+            });
+            await user.save();
+        }
+        // If user exists, they are signed in.
+
+        // 4. Issue your existing application JWT
+        const { token, expiryTimestamp } = generateToken(user._id);
+
+        // 5. Send your custom JWT back to the client
+        res.status(200).json({ 
+            success: true, 
+            message: 'Google Sign-In successful!', 
+            data: {
+                token,
+                expiresAt: expiryTimestamp,
+                user: user.toJSON() 
+            }
+        });
+
+    } catch (error) {
+        // Catches errors like invalid, expired, or revoked tokens
+        console.error("Firebase Token Verification Error:", error.message);
+        res.status(401).json({ success: false, message: 'Unauthorized: Invalid or expired token.' });
+    }
+});
+
+// ======================================================================
+// 5. LOGOUT (/api/auth/logout) 🚀 NEW ROUTE
+// Clears server-side session cookies (if used)
+// ======================================================================
+router.post('/logout', (req, res) => {
+    // If you are using HTTP-only cookies to store the JWT:
+    // res.clearCookie('token'); 
+    
+    // For your current implementation (which relies on client-side storage), 
+    // this endpoint primarily signals success back to the client.
+    res.status(200).json({ success: true, message: 'Logout successful' });
 });
 
 

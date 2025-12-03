@@ -5,6 +5,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
+// 🟢 NEW FIREBASE IMPORTS
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../firebase'; // Import the configured Firebase auth instance and provider
+
 // ======================================================================
 // ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for consistency
 // ======================================================================
@@ -32,6 +36,19 @@ export function Register() {
     // Access centralized login function
     const { login } = useAuth();
 
+    // Helper for navigation after successful auth (Manual or Google)
+    const handleSuccessfulAuth = (token: string, user: any) => {
+        // Automatically log in the user after successful registration/sign-up
+        login(token, user, true); // Always remember Google users
+
+        setFeedback('Account created successfully! Redirecting...');
+        setIsError(false);
+
+        setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+        }, 500);
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData({
@@ -42,6 +59,71 @@ export function Register() {
         setIsError(false);
     };
 
+    // ======================================================================
+    // 🟢 NEW: GOOGLE SIGN-UP HANDLER
+    // ======================================================================
+    const handleGoogleSignUp = async () => {
+        setLoading(true);
+        setFeedback(null);
+        setIsError(false);
+
+        try {
+            // 1. Authenticate with Firebase (Popup is used for both Sign In/Up)
+            const result = await signInWithPopup(auth, googleProvider);
+            
+            // 2. Get the Firebase ID Token
+            const idToken = await result.user.getIdToken(); 
+            
+            setFeedback("Verifying Google token with server...");
+
+            // 3. Send the ID Token to your custom server endpoint (/api/auth/google)
+            // This endpoint handles the check: Sign Up new user OR Sign In existing user.
+            const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ idToken }),
+            });
+
+            if (!response.ok) {
+                // If server verification fails (e.g., user is banned or server issue)
+                const errorData = await response.json().catch(() => ({ message: 'Server verification failed.' }));
+                throw new Error(errorData.message || `Google sign-up verification failed (Status: ${response.status}).`);
+            }
+
+            // 4. Handle success: Server responded with your custom JWT
+            const responseData = await response.json();
+            const { token, user } = responseData.data;
+
+            // Use the shared success handler
+            handleSuccessfulAuth(token, user); 
+
+        } catch (error) {
+            let message = "An unknown error occurred during Google sign-up.";
+            if (error instanceof Error) {
+                message = error.message;
+            } else if (error && typeof error === 'object' && 'code' in error) {
+                 // Handle Firebase specific errors
+                if (error.code === 'auth/popup-closed-by-user') {
+                    message = "Sign-up cancelled by user.";
+                } else if (error.code === 'auth/network-request-failed') {
+                    message = "Network error. Please check your connection.";
+                }
+            }
+
+            console.error("Google Sign-Up Error:", message, error);
+            setFeedback(message);
+            setIsError(true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    // ======================================================================
+    // EXISTING: MANUAL SUBMIT HANDLER
+    // ======================================================================
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFeedback(null);
@@ -78,57 +160,37 @@ export function Register() {
                 }),
             });
 
-            // ⚠️ FIX: Check for the response status before calling .json() to handle 
-            // unexpected end of JSON for non-200 responses.
             if (!response.ok) {
-                // If the response is not OK (e.g., 400, 409), try to parse the JSON error body
                 let errorData;
                 try {
                     errorData = await response.json();
                 } catch (jsonError) {
-                    // Handle case where body is not JSON (e.g. 500 server error returning plain text)
                     throw new Error(`Server error: Status ${response.status} (Non-JSON response).`);
                 }
 
                 if (errorData.errors?.length > 0) {
-                    // Validation errors (e.g., from express-validator)
                     const message = errorData.errors.map((err: any) => err.msg).join('; ');
                     setFeedback(`Validation failed: ${message}`);
                 } else {
-                    // Business logic errors (e.g., email already registered)
                     setFeedback(errorData.message || 'Registration failed. Please try again.');
                 }
                 setIsError(true);
-                return; // Stop execution here
+                return;
             }
 
-            // If response is OK (200/201)
             const responseData = await response.json();
 
             if (responseData.success) {
                 const { token, user } = responseData.data;
-
-                // Centralized login call (assuming user wants to be logged in automatically after registration)
-                // Note: Always passing 'true' for rememberMe is fine here.
-                login(token, user, true); 
-
-                setFeedback('Account created successfully! Redirecting...');
-                setIsError(false);
-                
-                // Redirect user after a small delay for the message to sink in
-                setTimeout(() => {
-                    navigate('/dashboard', { replace: true });
-                }, 500);
-                
+                // Use the shared success handler
+                handleSuccessfulAuth(token, user); 
             } else {
-                 // Fallback error, though covered by response.ok check above
                 setFeedback(responseData.message || 'Registration failed unexpectedly.');
                 setIsError(true);
             }
 
         } catch (error) {
             if (error instanceof Error) {
-                // Connection or severe parsing error
                 setFeedback(`Connection Error: ${error.message}. Please check your API status.`);
             } else {
                 setFeedback('An unknown error occurred during registration.');
@@ -156,6 +218,27 @@ export function Register() {
                     </div>
                 )}
                 {/* End Feedback Alert Section */}
+                
+                {/* 🚀 NEW: GOOGLE SIGN-UP BUTTON */}
+                <button
+                    onClick={handleGoogleSignUp}
+                    type="button"
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 mb-6"
+                    disabled={loading}
+                >
+                    <img src="/google-logo.svg" alt="Google" className="h-5 w-5" /> 
+
+[Image of Google Logo]
+
+                    <span>Sign up with Google</span>
+                </button>
+
+                {/* Divider */}
+                <div className="relative flex items-center mb-6">
+                    <div className="flex-grow border-t border-gray-300"></div>
+                    <span className="flex-shrink mx-4 text-gray-400 text-sm">Or register manually</span>
+                    <div className="flex-grow border-t border-gray-300"></div>
+                </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

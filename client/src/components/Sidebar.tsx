@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { X, Home, Upload, User, Info, MessageSquare, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
+// 🟢 NEW: Import the central AuthContext
+import { useAuth } from '../context/AuthContext'; 
 
 interface SidebarProps {
   isOpen: boolean;
@@ -10,19 +12,27 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // 🟢 NEW: Use centralized state and logic from useAuth()
+  const { isAuthenticated, logout } = useAuth();
+  
+  // NOTE: We no longer need the local useEffect or the useState for isAuthenticated
+  // as the data comes directly from AuthContext, which is the Single Source of Truth.
 
-  useEffect(() => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    setIsAuthenticated(!!token);
-  }, []);
-
+  // The simplified logout handler now uses the central context function
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
-    onClose();         // Close the sidebar
-    navigate('/');     // Redirect to home
-    window.location.reload(); // Force reload to update UI state
+    // 1. Call the centralized logout function (handles Firebase, tokens, and storage)
+    logout(); 
+    
+    // 2. Close the sidebar immediately
+    onClose(); 
+    
+    // 3. The AuthContext should handle navigation, but as a robust fallback, 
+    // we can ensure the user is redirected, though the AuthProvider should manage this.
+    // If AuthProvider handles navigation, remove this line:
+    navigate('/login'); 
+    
+    // ⚠️ IMPORTANT: We remove window.location.reload() as it's no longer necessary 
+    // and defeats the purpose of React's state management.
   };
 
   const navItems = [
@@ -51,7 +61,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <div className="p-6">
         <nav className="space-y-2">
           {navItems
-            .filter((item) => !item.authRequired || isAuthenticated)
+            .filter((item) => !item.authRequired || isAuthenticated) // Filters based on context state
             .map((item) => (
               <NavLink
                 key={item.to}
@@ -76,8 +86,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {isAuthenticated && (
         <div className="p-6 border-t">
           <button
-            onClick={handleLogout}
-            className="flex items-center space-x-3 text-red-600 hover:text-red-800"
+            onClick={handleLogout} // Calls the updated handler
+            className="flex items-center space-x-3 p-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-800 w-full"
             title="Logout"
           >
             <LogOut size={20} />

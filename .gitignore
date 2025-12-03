@@ -12,27 +12,35 @@ node_modules
 dist
 dist-ssr
 *.local
+.npm
+.yarn
 
-# === CRITICAL ADDITIONS ===
-
+# === CRITICAL ADDITIONS (Environment Variables & Secrets) ===
 # Environment Variables (MUST BE IGNORED)
-# This prevents accidentally pushing API keys, database credentials, etc.
 .env
 .env.development
 .env.production
 .env.local
 
-# Build/Cache Directories
-# Based on your tsconfig, ensure these are ignored
+# 🔑 FIREBASE SECRETS (If you used the JSON file locally)
+# This is where your private key would live if not using an ENV variable.
+serviceAccountKey.json 
+
+# === Build/Cache Directories ===
+# VITE/Webpack Build and Cache
 /build
 /out
 /coverage
+/temp
+# Next.js / other popular cache dirs
+.cache
+.next 
 
-# Operating System Files
+# === Operating System Files ===
 .DS_Store
 Thumbs.db
 
-# Editor directories and files
+# === Editor directories and files ===
 .vscode/*
 !.vscode/extensions.json
 # 👇 Preserve settings for debugging (if you use launch.json/tasks.json)

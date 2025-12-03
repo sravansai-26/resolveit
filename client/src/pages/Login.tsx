@@ -3,7 +3,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Mail, Lock } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; // 🟢 Confirmed: using 'context'
+import { useAuth } from '../context/AuthContext'; 
+
+// 🟢 NEW FIREBASE IMPORTS
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../firebase'; // Import the configured Firebase auth instance and provider
 
 // ======================================================================
 // ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for consistency
@@ -28,6 +32,21 @@ export function Login() {
     // Access AuthContext login function
     const { login } = useAuth();
 
+    // Helper for navigation after successful login (Manual or Google)
+    const handleSuccessfulAuth = (token: string, user: any, rememberMe: boolean) => {
+        login(token, user, rememberMe);
+
+        setFeedback("Login successful! Redirecting...");
+        setIsError(false);
+
+        const state = location.state as { from?: { pathname?: string } } | null;
+        const from = state?.from?.pathname || "/dashboard";
+
+        setTimeout(() => {
+            navigate(from, { replace: true });
+        }, 500);
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData({
@@ -38,6 +57,70 @@ export function Login() {
         setIsError(false);
     };
 
+    // ======================================================================
+    // 🟢 NEW: GOOGLE SIGN-IN HANDLER
+    // ======================================================================
+    const handleGoogleSignIn = async () => {
+        setLoading(true);
+        setFeedback(null);
+        setIsError(false);
+
+        try {
+            // 1. Authenticate with Firebase
+            const result = await signInWithPopup(auth, googleProvider);
+            
+            // 2. Get the Firebase ID Token
+            const idToken = await result.user.getIdToken(); 
+            
+            setFeedback("Verifying Google token with server...");
+
+            // 3. Send the ID Token to your custom server endpoint
+            const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ idToken }),
+            });
+
+            if (!response.ok) {
+                // If the server rejects the token (e.g., internal error, user banned)
+                const errorData = await response.json().catch(() => ({ message: 'Server verification failed.' }));
+                throw new Error(errorData.message || `Google sign-in verification failed (Status: ${response.status}).`);
+            }
+
+            // 4. Handle success: Server responded with your custom JWT
+            const responseData = await response.json();
+            const { token, user } = responseData.data;
+
+            // Use the shared success handler
+            handleSuccessfulAuth(token, user, true); // Always remember Google users
+
+        } catch (error) {
+            let message = "An unknown error occurred during Google sign-in.";
+            if (error instanceof Error) {
+                message = error.message;
+            } else if (error && typeof error === 'object' && 'code' in error) {
+                 // Handle specific Firebase errors (e.g., popup closed)
+                if (error.code === 'auth/popup-closed-by-user') {
+                    message = "Sign-in cancelled by user.";
+                } else if (error.code === 'auth/network-request-failed') {
+                    message = "Network error. Please try again.";
+                }
+            }
+
+            console.error("Google Sign-In Error:", message, error);
+            setFeedback(message);
+            setIsError(true);
+            setFormData(prev => ({ ...prev, password: "" })); // Clear password state just in case
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ======================================================================
+    // EXISTING: MANUAL SUBMIT HANDLER
+    // ======================================================================
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -57,42 +140,26 @@ export function Login() {
                 }),
             });
 
-            // If the response status is NOT ok (e.g., 401 Unauthorized, 400 Bad Request)
             if (!response.ok) {
                 let errorData;
                 try {
                     errorData = await response.json();
                 } catch (jsonError) {
-                    // This handles the "Unexpected end of JSON" error
                     throw new Error(`Server error: Status ${response.status} (Non-JSON response).`);
                 }
 
-                // Display server-side error message
                 setFeedback(errorData.message || "Login failed. Check your credentials.");
                 setIsError(true);
                 setFormData(prev => ({ ...prev, password: "" }));
-                return; // Stop execution
+                return;
             }
 
-            // If response is OK (200/201)
             const responseData = await response.json();
 
             if (responseData.success) {
                 const { token, user } = responseData.data;
-
-                // Centralized login call, using the 'rememberMe' state
-                login(token, user, formData.rememberMe);
-
-                setFeedback("Login successful! Redirecting...");
-                setIsError(false);
-
-                // Redirect to the page the user was trying to access, or /dashboard
-                const state = location.state as { from?: { pathname?: string } } | null;
-                const from = state?.from?.pathname || "/dashboard";
-
-                setTimeout(() => {
-                    navigate(from, { replace: true });
-                }, 500);
+                // Use the shared success handler
+                handleSuccessfulAuth(token, user, formData.rememberMe); 
 
             } else {
                 setFeedback(responseData.message || "Login failed unexpectedly.");
@@ -129,6 +196,28 @@ export function Login() {
                 )}
                 {/* End Feedback Alert Section */}
 
+                {/* 🚀 NEW: GOOGLE SIGN-IN BUTTON */}
+                <button
+                    onClick={handleGoogleSignIn}
+                    type="button"
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 mb-6"
+                    disabled={loading}
+                >
+                    {/* 
+
+[Image of Google Logo]
+ */}
+                    <img src="/google-logo.svg" alt="Google" className="h-5 w-5" /> 
+                    <span>Sign in with Google</span>
+                </button>
+
+                {/* Divider */}
+                <div className="relative flex items-center mb-6">
+                    <div className="flex-grow border-t border-gray-300"></div>
+                    <span className="flex-shrink mx-4 text-gray-400 text-sm">Or continue with</span>
+                    <div className="flex-grow border-t border-gray-300"></div>
+                </div>
+
                 <form onSubmit={handleSubmit} className="space-y-6">
                     
                     {/* Email Input */}
@@ -140,7 +229,7 @@ export function Login() {
                             <input
                                 type="email"
                                 id="email"
-                                name="email" // Added name for consistent handleChange use
+                                name="email" 
                                 value={formData.email}
                                 onChange={handleChange}
                                 className="pl-10 w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
@@ -160,7 +249,7 @@ export function Login() {
                             <input
                                 type="password"
                                 id="password"
-                                name="password" // Added name for consistent handleChange use
+                                name="password" 
                                 value={formData.password}
                                 onChange={handleChange}
                                 className="pl-10 w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
@@ -177,7 +266,7 @@ export function Login() {
                             <input
                                 type="checkbox"
                                 id="remember-me"
-                                name="rememberMe" // Added name for consistent handleChange use
+                                name="rememberMe" 
                                 checked={formData.rememberMe}
                                 onChange={handleChange}
                                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -195,7 +284,7 @@ export function Login() {
                         </Link>
                     </div>
 
-                    {/* Submit Button */}
+                    {/* Submit Button (Manual) */}
                     <button
                         type="submit"
                         className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
