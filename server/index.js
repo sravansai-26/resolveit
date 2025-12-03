@@ -9,11 +9,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 // 🟢 CRITICAL FIX: Use the simple, direct 'dotenv/config' import 
-//    This ensures all variables are loaded into process.env before other imports or execution.
 import 'dotenv/config'; 
 
 // --- CONFIGURATION LOADING ---
-// NOTE: We keep these for other file path operations (like media uploads), but they are no longer used for dotenv.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -24,19 +22,52 @@ import userRoutes from './routes/users.js';
 import feedbackRoutes from './routes/feedback.js';
 
 const app = express();
-// NOTE: The process.env.PORT is now guaranteed to be loaded here.
 const PORT = process.env.PORT || 5000; 
 
 // ------------------------------------------------------------------
-// CORS Configuration for Deployment Stability
+// CORS Configuration for Deployment Stability (FINAL FIX)
 // ------------------------------------------------------------------
 
+const ALLOWED_ORIGINS = [
+    // 🛑 Vercel Production Domain (CRITICAL for live app)
+    'https://resolveit-welfare.vercel.app', 
+    // Vercel Preview Domains (Highly recommended for testing branches)
+    'https://*.vercel.app', 
+    // Localhost for Development
+    'http://localhost:5173', 
+    'http://localhost:5000',
+    'http://192.168.24.6:5000', // Your specific BASE_URL IP
+];
+
 const corsOptions = {
-    // Universal wildcard is suitable for decoupled API access (Vercel, mobile, etc.)
-    origin: '*', 
-    credentials: true, 
+    // 🛑 FINAL CORS FIX: Use a function for dynamic origin checking 
+    // This is the most reliable way to handle multiple origins AND credentials.
+    origin: function (origin, callback) {
+        // 1. Allow requests with no origin (like Postman or server-to-server)
+        if (!origin) return callback(null, true); 
+        
+        // 2. Check if the requesting origin is in our allowed list
+        const isAllowed = ALLOWED_ORIGINS.some(allowed => {
+            if (allowed === '*') return true;
+            if (allowed.startsWith('https://*.vercel.app')) {
+                // Special handling for Vercel preview URLs
+                const regex = new RegExp(`^https://([^\\.]+)\\.vercel\\.app$`);
+                return regex.test(origin);
+            }
+            return origin === allowed;
+        });
+
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            // Log the failed origin for future debugging
+            console.error(`CORS BLOCKED: Origin ${origin} not allowed.`);
+            callback(new Error('Not allowed by CORS'), false);
+        }
+    }, 
+    credentials: true, // MUST BE TRUE for sending tokens/cookies
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204 // Standard status for successful preflight
 };
 
 app.use(cors(corsOptions));
