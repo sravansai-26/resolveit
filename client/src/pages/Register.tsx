@@ -207,7 +207,7 @@ export function Register() {
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">Create an Account</h1>
                     <p className="text-gray-600 mt-2">
-                        Join Resolveit and help improve your community
+                        Join Resolveit and help improve our community
                     </p>
                 </div>
 
