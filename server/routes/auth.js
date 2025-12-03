@@ -4,7 +4,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
-import authMiddleware from '../middleware/authMiddleware.js'; // 🟢 ASSUMED: We need a middleware file to protect routes
+import authMiddleware from '../middleware/auth.js'; // 🟢 ASSUMED: We need a middleware file to protect routes
 
 const router = express.Router();
 
