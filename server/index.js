@@ -31,9 +31,7 @@ const PORT = process.env.PORT || 5000;
 const ALLOWED_ORIGINS = [
     // 🛑 Vercel Production Domain (CRITICAL for live app)
     'https://resolveit-welfare.vercel.app', 
-    // Vercel Preview Domains (Highly recommended for testing branches)
-    'https://*.vercel.app', 
-    // Localhost for Development
+    // Localhost for Development (Vite default and Express default)
     'http://localhost:5173', 
     'http://localhost:5000',
     'http://192.168.24.6:5000', // Your specific BASE_URL IP
@@ -41,21 +39,15 @@ const ALLOWED_ORIGINS = [
 
 const corsOptions = {
     // 🛑 FINAL CORS FIX: Use a function for dynamic origin checking 
-    // This is the most reliable way to handle multiple origins AND credentials.
     origin: function (origin, callback) {
-        // 1. Allow requests with no origin (like Postman or server-to-server)
+        // 1. Allow requests with no origin (Postman, server-to-server)
         if (!origin) return callback(null, true); 
         
-        // 2. Check if the requesting origin is in our allowed list
-        const isAllowed = ALLOWED_ORIGINS.some(allowed => {
-            if (allowed === '*') return true;
-            if (allowed.startsWith('https://*.vercel.app')) {
-                // Special handling for Vercel preview URLs
-                const regex = new RegExp(`^https://([^\\.]+)\\.vercel\\.app$`);
-                return regex.test(origin);
-            }
-            return origin === allowed;
-        });
+        // 2. Check for Vercel Preview Domains (safer check)
+        const isVercelPreview = origin.endsWith('.vercel.app') && !origin.includes('resolveit-welfare.vercel.app');
+
+        // 3. Check if the requesting origin is in our allowed list OR is a Vercel preview
+        const isAllowed = ALLOWED_ORIGINS.includes(origin) || isVercelPreview;
 
         if (isAllowed) {
             callback(null, true);

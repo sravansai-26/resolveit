@@ -5,7 +5,11 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
 import { auth } from '../middleware/auth.js'; 
-import * as admin from '../config/firebaseAdmin.js';
+// NOTE: Assuming your firebaseAdmin.js file uses 'export default admin', 
+// the correct import syntax should be: import admin from '../config/firebaseAdmin.js';
+// However, since you provided 'import * as admin from...' which worked initially, 
+// we'll stick to that style to avoid breaking the module system again.
+import * as admin from '../config/firebaseAdmin.js'; 
 
 const router = express.Router();
 
@@ -150,7 +154,6 @@ router.post('/login', validateLogin, async (req, res) => {
             data: {
                 token,
                 expiresAt: expiryTimestamp,
-                user: user.toJSON() 
             }
         });
     } catch (error) {
@@ -206,7 +209,10 @@ router.post('/google', async (req, res) => {
     }
 
     // Check if Firebase Admin SDK is initialized based on the imported 'admin' object
-    if (!admin.apps.length) { 
+    // If you used 'import * as admin', you must access the core object inside the namespace
+    const fbAdmin = admin.default || admin;
+
+    if (!fbAdmin.apps.length) { 
         console.error("Firebase Admin SDK not initialized. Check FIREBASE_SERVICE_ACCOUNT variable.");
         return res.status(500).json({ 
             success: false, 
@@ -216,22 +222,25 @@ router.post('/google', async (req, res) => {
 
     try {
         // 1. Verify the ID Token with Firebase Admin SDK 
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const decodedToken = await fbAdmin.auth().verifyIdToken(idToken);
         const { email, name, picture } = decodedToken;
 
         // 2. Check if user exists in MongoDB
         let user = await User.findOne({ email });
 
         if (!user) {
+            // 🛑 CRASH FIX: Ensure 'name' is not null/undefined before manipulating it.
+            const userName = name || 'Google User';
+            const nameParts = userName.split(' ');
+            
             // 3. NEW USER (Sign-Up): Create a new user record using Google data
             user = new User({
                 email,
-                // Attempt to parse first and last name from the full name
-                firstName: name ? name.split(' ')[0] : 'Google', 
-                lastName: name ? name.split(' ').slice(1).join(' ') : 'User',
+                // Safely assign first name or default to 'Google'
+                firstName: nameParts[0] || 'Google', 
+                // Safely assign last name or default to 'User'
+                lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User',
                 avatar: picture, 
-                // NOTE: Password, phone, address, etc., will be missing. 
-                // This user is considered Google-authenticated.
             });
             await user.save();
         }
@@ -247,7 +256,7 @@ router.post('/google', async (req, res) => {
             data: {
                 token,
                 expiresAt: expiryTimestamp,
-                user: user.toJSON() 
+                user: user.toJSON() // Include user data in response
             }
         });
 
@@ -266,8 +275,7 @@ router.post('/logout', (req, res) => {
     // If you are using HTTP-only cookies to store the JWT:
     // res.clearCookie('token'); 
     
-    // For your current implementation (which relies on client-side storage), 
-    // this endpoint primarily signals success back to the client.
+    // This endpoint primarily signals success back to the client.
     res.status(200).json({ success: true, message: 'Logout successful' });
 });
 
