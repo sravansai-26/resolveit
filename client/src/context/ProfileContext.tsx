@@ -1,4 +1,4 @@
-// ProfileContext.tsx
+// src/context/ProfileContext.tsx
 
 import React, {
   createContext,
@@ -6,16 +6,17 @@ import React, {
   useState,
   useEffect,
   ReactNode,
+  useCallback, // 🟢 Added useCallback for stable functions
 } from "react";
 
 // ======================================================================
-// ✅ IMPORTANT: USE ABSOLUTE URL (Render backend)
-// DO NOT USE relative URLs — they break on Vercel and cause 405 & CORS.
+// ✅ ARCHITECTURE: VITE_API_URL (Option B) - STICKING TO THIS.
 // ======================================================================
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // ==================== Type Definitions ====================
 
+// Exporting types for use in other files (like AuthContext.tsx)
 export type User = {
   _id: string;
   firstName: string;
@@ -24,7 +25,7 @@ export type User = {
   phone: string;
   address: string;
   bio: string;
-  avatar: string;
+  avatar: string; // URL path to the avatar image
 };
 
 export type Vote = {
@@ -38,7 +39,7 @@ export type Issue = {
   description: string;
   category: string;
   location: string;
-  media: string[];
+  media: string[]; // Array of media URL paths
   votes: Vote[];
   upvotes: number;
   downvotes: number;
@@ -79,31 +80,41 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const getToken = () => {
+  const getToken = useCallback(() => {
     return localStorage.getItem("token") || sessionStorage.getItem("token");
-  };
+  }, []);
 
-  const saveUserToStorage = (userData: User) => {
+  const saveUserToStorage = useCallback((userData: User) => {
+    // Determine which storage to use based on where the token is stored
     const useLocal = localStorage.getItem("token") ? true : false;
     const storage = useLocal ? localStorage : sessionStorage;
     storage.setItem("user", JSON.stringify(userData));
-  };
+  }, []);
 
   // ==================== API Calls ====================
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     setError(null);
-    try {
-      const token = getToken();
-      if (!token) throw new Error("No authentication token found.");
+    const token = getToken();
+    if (!token) {
+      setUser(null);
+      return;
+    }
 
+    try {
       const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: "GET",
         headers: {
-          "Content-Type": "application/json",
+          // 🟢 Only JSON needed for GET request
+          "Content-Type": "application/json", 
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (res.status === 401 || res.status === 403) {
+        // Token expired/invalid, let AuthContext handle full logout if necessary
+        throw new Error("Session expired or invalid token."); 
+      }
 
       const json = await res.json();
 
@@ -111,22 +122,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         setUser(json.data);
         saveUserToStorage(json.data);
       } else {
-        throw new Error(json.message);
+        throw new Error(json.message || "Failed to fetch profile data.");
       }
     } catch (err: any) {
       console.error("Error fetching profile:", err);
-      setError(err.message || "Failed to load profile.");
-      setUser(null);
-      localStorage.removeItem("user");
-      sessionStorage.removeItem("user");
+      // We don't clear tokens here, AuthContext handles that to prevent race conditions
+      setError(err.message || "Failed to load profile."); 
     }
-  };
+  }, [getToken, saveUserToStorage]);
 
-  const fetchIssues = async () => {
+  const fetchIssues = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setIssues([]);
+      return;
+    }
+
     try {
-      const token = getToken();
-      if (!token) throw new Error("No token found.");
-
       const res = await fetch(`${API_BASE_URL}/api/issues/my`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -144,13 +156,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       console.error("Error fetching issues:", err);
       setIssues([]);
     }
-  };
+  }, [getToken]);
 
-  const fetchReposts = async () => {
+  const fetchReposts = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setReposts([]);
+      return;
+    }
+
     try {
-      const token = getToken();
-      if (!token) throw new Error("No token found.");
-
       const res = await fetch(`${API_BASE_URL}/api/issues/reposts/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -168,51 +183,61 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       console.error("Error fetching reposts:", err);
       setReposts([]);
     }
-  };
+  }, [getToken]);
 
-  const updateProfile = async (data: Partial<User>, avatarFile?: File) => {
+  const updateProfile = useCallback(async (data: Partial<User>, avatarFile?: File) => {
+    const token = getToken();
+    if (!token) {
+        alert("Authentication required for profile update.");
+        return;
+    }
+
     try {
-      const token = getToken();
-      if (!token) throw new Error("No token found.");
-
       const formData = new FormData();
 
       Object.entries(data).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
+          // Append non-file data
           formData.append(key, value as string);
         }
       });
 
       if (avatarFile) {
-        formData.append("avatar", avatarFile);
+        // Append the file
+        formData.append("avatar", avatarFile); 
       }
 
       const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
+          // 🔴 CRITICAL FIX: DO NOT set 'Content-Type' for FormData
+          // The browser sets 'multipart/form-data' automatically, 
+          // which is required for file uploads.
         },
         body: formData,
       });
 
       const json = await res.json();
 
-      if (!res.ok) throw new Error(json.message);
+      if (!res.ok) {
+        throw new Error(json.message || "Profile update failed.");
+      }
 
       setUser(json.data);
       saveUserToStorage(json.data);
       alert("Profile updated successfully!");
     } catch (err: any) {
       console.error("Profile update error:", err);
-      alert(err.message);
+      alert(err.message || "Failed to update profile due to a network error.");
     }
-  };
+  }, [getToken, saveUserToStorage]);
 
-  const deleteIssue = async (issueId: string) => {
+  const deleteIssue = useCallback(async (issueId: string) => {
+    const token = getToken();
+    if (!token) throw new Error("No token found.");
+
     try {
-      const token = getToken();
-      if (!token) throw new Error("No token found.");
-
       const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}`, {
         method: "DELETE",
         headers: {
@@ -222,21 +247,27 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       const json = await res.json();
 
-      if (!res.ok) throw new Error(json.message);
+      if (!res.ok) throw new Error(json.message || "Failed to delete issue.");
 
+      // Optimistic UI update: remove the issue immediately
       setIssues((prev) => prev.filter((i) => i._id !== issueId));
       setReposts((prev) => prev.filter((i) => i._id !== issueId));
+      alert("Issue successfully deleted.");
+
     } catch (err: any) {
       console.error("Delete issue error:", err);
       throw err;
     }
-  };
+  }, [getToken]);
 
-  const toggleRepost = async (issueId: string) => {
+  // Note: Your repost logic currently removes the item from reposts state
+  // This suggests the endpoint is *toggling* the repost status, and if it's successful, 
+  // it means the issue is no longer a repost for the user.
+  const toggleRepost = useCallback(async (issueId: string) => {
+    const token = getToken();
+    if (!token) throw new Error("No token found.");
+
     try {
-      const token = getToken();
-      if (!token) throw new Error("No token found.");
-
       const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/repost`, {
         method: "POST",
         headers: {
@@ -248,45 +279,65 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       const json = await res.json();
 
-      if (!res.ok) throw new Error(json.message);
+      if (!res.ok) throw new Error(json.message || "Failed to toggle repost status.");
 
-      setReposts((prev) => prev.filter((issue) => issue._id !== issueId));
+      // The server response usually indicates the new status (e.g., {isReposted: boolean})
+      // For now, we'll keep your existing logic which assumes a successful POST means it was removed.
+      // A more robust implementation would read the server's response payload to update state correctly.
+      
+      // Temporary logic based on existing code: filter out the issue from reposts array
+      setReposts((prev) => prev.filter((issue) => issue._id !== issueId)); 
+
     } catch (err: any) {
       console.error("Repost toggle error:", err);
       throw err;
     }
-  };
+  }, [getToken]);
 
   // ==================== Initial Load Effect ====================
 
   useEffect(() => {
-    const token = getToken();
-    const storedUser =
-      localStorage.getItem("user") || sessionStorage.getItem("user");
+    let isMounted = true; // Cleanup flag
 
-    if (storedUser && token) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        if (parsedUser?._id) {
-          setUser(parsedUser);
+    const initializeProfileData = async () => {
+      const token = getToken();
+      const storedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
+
+      if (storedUser && token && isMounted) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser?._id) {
+            setUser(parsedUser);
+          }
+        } catch {
+          // If stored user data is corrupted, clear it (tokens will be validated by AuthContext)
+          localStorage.removeItem("user");
+          sessionStorage.removeItem("user");
         }
-      } catch {
-        localStorage.removeItem("user");
-        sessionStorage.removeItem("user");
       }
-    }
 
-    if (token) {
-      fetchProfile()
-        .then(() => {
-          fetchIssues();
-          fetchReposts();
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, []);
+      if (token && isMounted) {
+        // Fetch fresh profile data and then issues/reposts
+        // We use .then() to ensure serial execution.
+        await fetchProfile();
+        await fetchIssues();
+        await fetchReposts();
+      }
+
+      if (isMounted) {
+        setLoading(false);
+      }
+    };
+
+    initializeProfileData();
+    
+    // Cleanup function
+    return () => {
+        isMounted = false;
+    };
+  }, [getToken, fetchProfile, fetchIssues, fetchReposts]); // Added dependencies
+
+  // ==================== Return Context ====================
 
   return (
     <ProfileContext.Provider
