@@ -15,12 +15,13 @@ const router = express.Router();
 
 // Get the JWT secret and expiration from environment variables
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = '1h'; // Matches your current setting
+const JWT_EXPIRES_IN = '7d';  // ✅ 7 days instead of 1h
 
 // Helper to calculate expiry time in seconds (as expected by client)
 const getExpiryTimestamp = () => {
-    return Math.floor(Date.now() / 1000) + (60 * 60); // 1 hour in seconds
+    return Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // ✅ 7 days in seconds
 };
+
 
 // Helper to pick allowed fields from req.body for user creation
 const pickUserFields = (body) => ({
