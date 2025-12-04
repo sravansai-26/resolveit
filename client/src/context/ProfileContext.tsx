@@ -183,11 +183,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
         if (avatarFile) form.append("avatar", avatarFile);
 
-        const res = await fetch(`${API_BASE_URL}/api/users/me`, {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${token}` },
-          body: form,
-        });
+      const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
+  method: "PUT",
+  headers: { Authorization: `Bearer ${token}` },
+  body: form,
+});
+
 
         const json = await res.json();
 
