@@ -1,4 +1,4 @@
-// src/context/ProfileContext.tsx
+// src/context/ProfileContext.tsx - FULLY FIXED
 
 import React, {
   createContext,
@@ -6,7 +6,7 @@ import React, {
   useState,
   useEffect,
   ReactNode,
-  useCallback, // 🟢 Added useCallback for stable functions
+  useCallback,
 } from "react";
 
 // ======================================================================
@@ -68,11 +68,9 @@ export type ProfileContextType = {
 };
 
 // ==================== Context Setup ====================
-
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 // ==================== Provider Component ====================
-
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -93,6 +91,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   // ==================== API Calls ====================
 
+  // 🟢 FIXED: Changed /api/users/profile → /api/auth/me AND json.data → json.user
   const fetchProfile = useCallback(async () => {
     setError(null);
     const token = getToken();
@@ -102,32 +101,32 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
+      const res = await fetch(`${API_BASE_URL}/api/auth/me`, { // ✅ FIXED: /api/auth/me
         method: "GET",
         headers: {
-          // 🟢 Only JSON needed for GET request
-          "Content-Type": "application/json", 
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
       });
 
       if (res.status === 401 || res.status === 403) {
         // Token expired/invalid, let AuthContext handle full logout if necessary
-        throw new Error("Session expired or invalid token."); 
+        throw new Error("Session expired or invalid token.");
       }
 
       const json = await res.json();
 
-      if (res.ok && json.success) {
-        setUser(json.data);
-        saveUserToStorage(json.data);
+      // 🟢 FIXED: json.data → json.user (matches auth.js /me response)
+      if (res.ok && json.success && json.user) { // ✅ FIXED: json.user
+        setUser(json.user); // ✅ FIXED: json.user
+        saveUserToStorage(json.user); // ✅ FIXED: json.user
       } else {
         throw new Error(json.message || "Failed to fetch profile data.");
       }
     } catch (err: any) {
       console.error("Error fetching profile:", err);
       // We don't clear tokens here, AuthContext handles that to prevent race conditions
-      setError(err.message || "Failed to load profile."); 
+      setError(err.message || "Failed to load profile.");
     }
   }, [getToken, saveUserToStorage]);
 
@@ -185,11 +184,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, [getToken]);
 
+  // 🟢 KEEP: PUT /api/users/profile is correct for UPDATES (not GET)
   const updateProfile = useCallback(async (data: Partial<User>, avatarFile?: File) => {
     const token = getToken();
     if (!token) {
-        alert("Authentication required for profile update.");
-        return;
+      alert("Authentication required for profile update.");
+      return;
     }
 
     try {
@@ -204,7 +204,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       if (avatarFile) {
         // Append the file
-        formData.append("avatar", avatarFile); 
+        formData.append("avatar", avatarFile);
       }
 
       const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
@@ -212,7 +212,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         headers: {
           Authorization: `Bearer ${token}`,
           // 🔴 CRITICAL FIX: DO NOT set 'Content-Type' for FormData
-          // The browser sets 'multipart/form-data' automatically, 
+          // The browser sets 'multipart/form-data' automatically,
           // which is required for file uploads.
         },
         body: formData,
@@ -224,6 +224,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         throw new Error(json.message || "Profile update failed.");
       }
 
+      // 🟢 FIXED: json.data → json.data (PUT endpoint returns data)
       setUser(json.data);
       saveUserToStorage(json.data);
       alert("Profile updated successfully!");
@@ -253,7 +254,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setIssues((prev) => prev.filter((i) => i._id !== issueId));
       setReposts((prev) => prev.filter((i) => i._id !== issueId));
       alert("Issue successfully deleted.");
-
     } catch (err: any) {
       console.error("Delete issue error:", err);
       throw err;
@@ -261,7 +261,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [getToken]);
 
   // Note: Your repost logic currently removes the item from reposts state
-  // This suggests the endpoint is *toggling* the repost status, and if it's successful, 
+  // This suggests the endpoint is *toggling* the repost status, and if it's successful,
   // it means the issue is no longer a repost for the user.
   const toggleRepost = useCallback(async (issueId: string) => {
     const token = getToken();
@@ -286,8 +286,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       // A more robust implementation would read the server's response payload to update state correctly.
       
       // Temporary logic based on existing code: filter out the issue from reposts array
-      setReposts((prev) => prev.filter((issue) => issue._id !== issueId)); 
-
+      setReposts((prev) => prev.filter((issue) => issue._id !== issueId));
     } catch (err: any) {
       console.error("Repost toggle error:", err);
       throw err;
@@ -295,7 +294,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [getToken]);
 
   // ==================== Initial Load Effect ====================
-
   useEffect(() => {
     let isMounted = true; // Cleanup flag
 
@@ -333,12 +331,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     
     // Cleanup function
     return () => {
-        isMounted = false;
+      isMounted = false;
     };
   }, [getToken, fetchProfile, fetchIssues, fetchReposts]); // Added dependencies
 
   // ==================== Return Context ====================
-
   return (
     <ProfileContext.Provider
       value={{
@@ -364,7 +361,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 }
 
 // ==================== Hook ====================
-
 export function useProfile() {
   const context = useContext(ProfileContext);
   if (!context) {
