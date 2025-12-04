@@ -11,7 +11,7 @@ import React, {
 
 import { User as ProfileUser } from './ProfileContext';
 
-// 🟢 FIREBASE
+// FIREBASE
 import { signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 
@@ -34,7 +34,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<ProfileUser | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [loading, setLoading] = useState(true); // TRUE until Firebase + backend both done
+    const [loading, setLoading] = useState(true); // TRUE until fully resolved
     const [error, setError] = useState<string | null>(null);
 
     // Get token helper
@@ -120,37 +120,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     // ===========================
-    //  FIXED AUTH INITIALIZER
+    //  FINAL FIXED AUTH INITIALIZER – NO MORE FLASH
     // ===========================
     useEffect(() => {
         let isMounted = true;
 
-        // Wait for Firebase to finish restoring session
-        const unsubscribe = onAuthStateChanged(auth, async () => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (!isMounted) return;
 
             const token = getToken();
-            const storedUser =
-                localStorage.getItem("user") || sessionStorage.getItem("user");
+            const storedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
 
-            if (token && storedUser) {
-                try {
-                    const parsed = JSON.parse(storedUser);
-                    if (parsed?._id) {
-                        setUser(parsed);
-                        setIsAuthenticated(true);
+            // ——— CASE 1: We have a token → TRUST IT IMMEDIATELY ———
+            if (token) {
+                // Optimistically mark as authenticated
+                setIsAuthenticated(true);
+
+                // Restore stored user if exists
+                if (storedUser) {
+                    try {
+                        const parsed = JSON.parse(storedUser);
+                        if (parsed?._id) {
+                            setUser(parsed);
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse stored user", e);
                     }
+                }
 
-                    // Validate with backend AFTER Firebase ready
+                // Now validate token with backend ( asynchronously )
+                // If backend says invalid → we log out
+                try {
                     await fetchUserProfile();
                 } catch {
+                    // Token invalid → force logout
                     clearAuthData();
                 }
-            } else {
-                clearAuthData();
+
+                // Only now we are 100% done loading
+                if (isMounted) setLoading(false);
+                return;
             }
 
-            // NOW we safely mark loading=false (Firebase + backend done)
+            // ——— CASE 2: No token → definitely not logged in ———
+            clearAuthData();
             if (isMounted) setLoading(false);
         });
 
