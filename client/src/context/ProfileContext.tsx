@@ -207,7 +207,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         formData.append("avatar", avatarFile);
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
+      const res = await fetch(`${API_BASE_URL}/api/users/me`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -220,8 +220,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       const json = await res.json();
 
-      if (!res.ok) {
-        throw new Error(json.message || "Profile update failed.");
+    if (res.ok && json.success) {
+  setUser(json.user || json.data.user || json.userData);
       }
 
       // 🟢 FIXED: json.data → json.data (PUT endpoint returns data)
