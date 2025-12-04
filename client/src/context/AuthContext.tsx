@@ -1,4 +1,4 @@
-// src/context/AuthContext.tsx
+// src/context/AuthContext.tsx - FULLY FIXED
 
 import React, {
   createContext,
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [clearAuthData]);
 
-  // Fetch user profile from backend
+  // Fetch user profile from backend - 🟢 FIXED: json.data → json.user
   const fetchUserProfile = useCallback(async () => {
     const token = getToken();
     if (!token) {
@@ -90,13 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/me`, { // <== Fix here
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  },
-});
-
+      const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (res.status === 401 || res.status === 403) {
         // token invalid / expired → log out
@@ -106,8 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const json = await res.json();
 
-      if (res.ok && json.success && json.data) {
-        const userData = json.data;
+      // 🟢 FIXED: json.data → json.user (matches /api/auth/me response)
+      if (res.ok && json.success && json.user) {
+        const userData = json.user; // ✅ FIXED: json.user not json.data
         const storage =
           localStorage.getItem("token") ? localStorage : sessionStorage;
 
