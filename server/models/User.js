@@ -1,4 +1,3 @@
-// server/models/User.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -23,17 +22,17 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: false,          // Changed to optional for Google sign-in users
     minlength: [6, 'Password must be at least 6 characters']
   },
   phone: {
     type: String,
-    required: true,
+    required: false            // Changed to optional for Google sign-in users
     // Add specific regex for 10-digit phone if needed: match: [/^\d{10}$/, 'Must be a 10-digit phone number']
   },
   address: {
     type: String,
-    required: true
+    required: false           // Changed to optional for Google sign-in users
   },
   bio: {
     type: String,
@@ -67,14 +66,14 @@ userSchema.set('toJSON', {
 
 // Middleware: Hash password before saving or updating
 userSchema.pre('save', async function(next) {
-  // Only hash if the password field has been modified
-  if (!this.isModified('password')) return next();
+  // Only hash if the password field has been modified and exists
+  if (!this.isModified('password') || !this.password) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
-  } catch (error) { // Removed : any type annotation
+  } catch (error) {
     next(error);
   }
 });
@@ -83,10 +82,10 @@ userSchema.pre('save', async function(next) {
  * Instance method to compare a plain text password with the hashed password.
  * @param candidatePassword - Plain text password from the login form.
  */
-userSchema.methods.comparePassword = async function(candidatePassword) { // Removed type annotations
+userSchema.methods.comparePassword = async function(candidatePassword) {
   // Check if the current instance has a password to compare against
   if (!this.password) return false;
-  
+
   // Use bcrypt to compare the two passwords
   return bcrypt.compare(candidatePassword, this.password);
 };

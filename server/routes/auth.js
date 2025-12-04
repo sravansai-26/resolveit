@@ -1,29 +1,19 @@
-// routes/auth.js
-
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
 import { auth } from '../middleware/auth.js'; 
-// NOTE: Assuming your firebaseAdmin.js file uses 'export default admin', 
-// the correct import syntax should be: import admin from '../config/firebaseAdmin.js';
-// However, since you provided 'import * as admin from...' which worked initially, 
-// we'll stick to that style to avoid breaking the module system again.
 import * as admin from '../config/firebaseAdmin.js'; 
 
 const router = express.Router();
 
-// Get the JWT secret and expiration from environment variables
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = '7d';  // ✅ 7 days instead of 1h
+const JWT_EXPIRES_IN = '7d';  // 7 days instead of 1h
 
-// Helper to calculate expiry time in seconds (as expected by client)
 const getExpiryTimestamp = () => {
-    return Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // ✅ 7 days in seconds
+    return Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days in seconds
 };
 
-
-// Helper to pick allowed fields from req.body for user creation
 const pickUserFields = (body) => ({
     firstName: body.firstName,
     lastName: body.lastName,
@@ -35,7 +25,6 @@ const pickUserFields = (body) => ({
     avatar: body.avatar
 });
 
-// Middleware for validating registration input
 const validateRegister = [
     body('firstName').trim().notEmpty().withMessage('First name is required'),
     body('lastName').trim().notEmpty().withMessage('Last name is required'),
@@ -47,13 +36,11 @@ const validateRegister = [
     body('avatar').optional().trim()
 ];
 
-// Middleware for validating login input
 const validateLogin = [
     body('email').isEmail().withMessage('Valid email is required'),
     body('password').notEmpty().withMessage('Password is required')
 ];
 
-// Helper to generate JWT token and expiry timestamp
 const generateToken = (userId) => {
     if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined.");
     
@@ -66,9 +53,6 @@ const generateToken = (userId) => {
     return { token, expiryTimestamp };
 };
 
-// ======================================================================
-// 1. REGISTER (/api/auth/register)
-// ======================================================================
 router.post('/register', validateRegister, async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -114,10 +98,6 @@ router.post('/register', validateRegister, async (req, res) => {
     }
 });
 
-// ======================================================================
-// 2. LOGIN (/api/auth/login)
-// ======================================================================
-// ⚠️ PRODUCTION WARNING: Implement a rate limiting middleware here (e.g., express-rate-limit)
 router.post('/login', validateLogin, async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -166,14 +146,8 @@ router.post('/login', validateLogin, async (req, res) => {
     }
 });
 
-
-// ======================================================================
-// 3. GET CURRENT USER PROFILE (/api/auth/me)
-// 🟢 FIX: Uses the correctly imported 'auth' middleware
-// ======================================================================
 router.get('/me', auth, async (req, res) => {
     try {
-        // req.user is set by auth middleware
         const user = await User.findById(req.user.userId); 
 
         if (!user) {
@@ -183,10 +157,9 @@ router.get('/me', auth, async (req, res) => {
             });
         }
         
-        // Return only the token-verified user data
         res.json({
             success: true,
-            user: user.toJSON() // Use toJSON() for consistency
+            user: user.toJSON()
         });
 
     } catch (error) {
@@ -198,10 +171,6 @@ router.get('/me', auth, async (req, res) => {
     }
 });
 
-// ======================================================================
-// 4. GOOGLE AUTHENTICATION (/api/auth/google) 🚀 NEW ROUTE
-// Handles both Google Sign-Up and Sign-In using Firebase Token Verification
-// ======================================================================
 router.post('/google', async (req, res) => {
     const { idToken } = req.body;
     
@@ -209,8 +178,6 @@ router.post('/google', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Missing Firebase ID token.' });
     }
 
-    // Check if Firebase Admin SDK is initialized based on the imported 'admin' object
-    // If you used 'import * as admin', you must access the core object inside the namespace
     const fbAdmin = admin.default || admin;
 
     if (!fbAdmin.apps.length) { 
@@ -222,63 +189,51 @@ router.post('/google', async (req, res) => {
     }
 
     try {
-        // 1. Verify the ID Token with Firebase Admin SDK 
         const decodedToken = await fbAdmin.auth().verifyIdToken(idToken);
         const { email, name, picture } = decodedToken;
 
-        // 2. Check if user exists in MongoDB
         let user = await User.findOne({ email });
 
         if (!user) {
-            // 🛑 CRASH FIX: Ensure 'name' is not null/undefined before manipulating it.
             const userName = name || 'Google User';
             const nameParts = userName.split(' ');
-            
-            // 3. NEW USER (Sign-Up): Create a new user record using Google data
+
+            // ALTERNATIVE FIX: Add defaults for required fields so validation doesn't fail
             user = new User({
                 email,
-                // Safely assign first name or default to 'Google'
-                firstName: nameParts[0] || 'Google', 
-                // Safely assign last name or default to 'User'
+                firstName: nameParts[0] || 'Google',
                 lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User',
                 avatar: picture, 
+                phone: 'Not provided',        // Default value
+                address: 'Not provided',      // Default value
+                password: 'google-auth',      // Dummy password
             });
             await user.save();
         }
-        // If user exists, they are signed in.
 
-        // 4. Issue your existing application JWT
         const { token, expiryTimestamp } = generateToken(user._id);
 
-        // 5. Send your custom JWT back to the client
         res.status(200).json({ 
             success: true, 
             message: 'Google Sign-In successful!', 
             data: {
                 token,
                 expiresAt: expiryTimestamp,
-                user: user.toJSON() // Include user data in response
+                user: user.toJSON()
             }
         });
 
     } catch (error) {
-        // Catches errors like invalid, expired, or revoked tokens
         console.error("Firebase Token Verification Error:", error.message);
         res.status(401).json({ success: false, message: 'Unauthorized: Invalid or expired token.' });
     }
 });
 
-// ======================================================================
-// 5. LOGOUT (/api/auth/logout) 🚀 NEW ROUTE
-// Clears server-side session cookies (if used)
-// ======================================================================
 router.post('/logout', (req, res) => {
     // If you are using HTTP-only cookies to store the JWT:
     // res.clearCookie('token'); 
     
-    // This endpoint primarily signals success back to the client.
     res.status(200).json({ success: true, message: 'Logout successful' });
 });
-
 
 export default router;
