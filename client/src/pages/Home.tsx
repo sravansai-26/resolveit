@@ -128,6 +128,13 @@ export function Home() {
                     },
                 });
 
+                // 🟢 NEW: Handle 401 specifically (expired token)
+if (res.status === 401) {
+    console.warn("Token expired during issues fetch - AuthContext will logout");
+    setIsLoading(false);
+    return;
+}
+
                 const json = await res.json();
 
                 if (!res.ok || !json.success || !Array.isArray(json.data)) {
@@ -172,12 +179,17 @@ export function Home() {
                 setIssues((prev) =>
                     reset ? issuesWithFlags : [...prev, ...issuesWithFlags]
                 );
-            } catch (err) {
-                console.error("Error loading issues:", err);
-                setHasMore(false);
-            } finally {
-                setIsLoading(false);
-            }
+           } catch (err: any) {
+    console.error("Error loading issues:", err);
+    // 🟢 ADD THIS ONE LINE:
+    if (err.message?.includes("401") || err.message?.includes("token")) {
+        console.warn("Token issue detected, AuthContext will handle logout");
+    }
+    setHasMore(false);
+} finally {
+    setIsLoading(false);
+}
+
         },
         [filters, user]
     );
