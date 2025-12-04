@@ -1,3 +1,5 @@
+// routes/auth.js - FULLY FIXED VERSION
+
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
@@ -8,10 +10,10 @@ import * as admin from '../config/firebaseAdmin.js';
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = '7d';  // 7 days instead of 1h
+const JWT_EXPIRES_IN = '7d'; 
 
 const getExpiryTimestamp = () => {
-    return Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60); // 7 days in seconds
+    return Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
 };
 
 const pickUserFields = (body) => ({
@@ -19,8 +21,8 @@ const pickUserFields = (body) => ({
     lastName: body.lastName,
     email: body.email,
     password: body.password,
-    phone: body.phone,
-    address: body.address,
+    phone: body.phone || 'Not provided',
+    address: body.address || 'Not provided',
     bio: body.bio, 
     avatar: body.avatar
 });
@@ -30,8 +32,8 @@ const validateRegister = [
     body('lastName').trim().notEmpty().withMessage('Last name is required'),
     body('email').isEmail().withMessage('Valid email is required'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-    body('phone').trim().notEmpty().withMessage('Phone number is required'), 
-    body('address').trim().notEmpty().withMessage('Address is required'),
+    body('phone').optional().trim(),
+    body('address').optional().trim(),
     body('bio').optional().trim(),
     body('avatar').optional().trim()
 ];
@@ -53,6 +55,7 @@ const generateToken = (userId) => {
     return { token, expiryTimestamp };
 };
 
+// ✅ 1. REGISTER - FIXED validation for optional fields
 router.post('/register', validateRegister, async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -98,6 +101,7 @@ router.post('/register', validateRegister, async (req, res) => {
     }
 });
 
+// ✅ 2. LOGIN
 router.post('/login', validateLogin, async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -135,6 +139,7 @@ router.post('/login', validateLogin, async (req, res) => {
             data: {
                 token,
                 expiresAt: expiryTimestamp,
+                user: user.toJSON()
             }
         });
     } catch (error) {
@@ -146,9 +151,11 @@ router.post('/login', validateLogin, async (req, res) => {
     }
 });
 
+// ✅ 3. PROFILE - FIXED: req.user._id (matches new middleware)
 router.get('/me', auth, async (req, res) => {
     try {
-        const user = await User.findById(req.user.userId); 
+        // ✅ FIXED: Now uses req.user._id from middleware
+        const user = await User.findById(req.user._id).select('-password'); 
 
         if (!user) {
             return res.status(404).json({
@@ -171,6 +178,7 @@ router.get('/me', auth, async (req, res) => {
     }
 });
 
+// ✅ 4. GOOGLE LOGIN - FIXED response structure + defaults
 router.post('/google', async (req, res) => {
     const { idToken } = req.body;
     
@@ -181,10 +189,10 @@ router.post('/google', async (req, res) => {
     const fbAdmin = admin.default || admin;
 
     if (!fbAdmin.apps.length) { 
-        console.error("Firebase Admin SDK not initialized. Check FIREBASE_SERVICE_ACCOUNT variable.");
+        console.error("Firebase Admin SDK not initialized.");
         return res.status(500).json({ 
             success: false, 
-            message: 'Server Error: Google Auth service is unavailable.' 
+            message: 'Server Error: Google Auth service unavailable.' 
         });
     }
 
@@ -198,15 +206,15 @@ router.post('/google', async (req, res) => {
             const userName = name || 'Google User';
             const nameParts = userName.split(' ');
 
-            // ALTERNATIVE FIX: Add defaults for required fields so validation doesn't fail
             user = new User({
                 email,
                 firstName: nameParts[0] || 'Google',
                 lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User',
                 avatar: picture, 
-                phone: 'Not provided',        // Default value
-                address: 'Not provided',      // Default value
-                password: 'google-auth',      // Dummy password
+                phone: 'Not provided',
+                address: 'Not provided',
+                password: 'google-auth',
+                bio: ''
             });
             await user.save();
         }
@@ -229,10 +237,8 @@ router.post('/google', async (req, res) => {
     }
 });
 
+// ✅ 5. LOGOUT
 router.post('/logout', (req, res) => {
-    // If you are using HTTP-only cookies to store the JWT:
-    // res.clearCookie('token'); 
-    
     res.status(200).json({ success: true, message: 'Logout successful' });
 });
 
