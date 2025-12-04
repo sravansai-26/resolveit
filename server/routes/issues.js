@@ -1,4 +1,4 @@
-// routes/issues.js - FULLY FIXED VERSION
+// routes/issues.js - FINAL STABLE VERSION (NO LINES SKIPPED)
 
 import express from 'express';
 import multer from 'multer';
@@ -7,25 +7,28 @@ import { auth } from '../middleware/auth.js';
 import cloudinary from '../config/cloudinary.js';
 import streamifier from 'streamifier';
 import { body, validationResult } from 'express-validator';
-import { sendEmailToAuthority } from '../utils/email.js';
 
 const router = express.Router();
 
-// Multer Memory Storage (300MB limit)
+/* -------------------------------------------------------------
+   MULTER — MEMORY STORAGE (cloud upload only)
+------------------------------------------------------------- */
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 300 * 1024 * 1024 },
+  limits: { fileSize: 300 * 1024 * 1024 }, // 300MB
   fileFilter(req, file, cb) {
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type, only images and videos allowed'));
+      cb(new Error('Invalid media type — only images or videos allowed.'));
     }
   },
 });
 
-// Cloudinary uploader
+/* -------------------------------------------------------------
+   CLOUDINARY UPLOAD HELPER
+------------------------------------------------------------- */
 const uploadToCloudinary = (file) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -34,17 +37,15 @@ const uploadToCloudinary = (file) => {
         resource_type: file.mimetype.startsWith('video') ? 'video' : 'auto',
       },
       (error, result) => {
-        if (result) {
-          resolve(result.secure_url);
-        } else {
-          reject(error);
-        }
+        if (result) resolve(result.secure_url);
+        else reject(error);
       }
     );
     streamifier.createReadStream(file.buffer).pipe(stream);
   });
 };
 
+/* Extract issue fields from body */
 const pickIssueFields = (body) => ({
   title: body.title,
   description: body.description,
@@ -53,7 +54,9 @@ const pickIssueFields = (body) => ({
   status: body.status,
 });
 
-// ✅ FIXED: populateIssue now works with proper query chaining
+/* -------------------------------------------------------------
+   POPULATION HELPERS
+------------------------------------------------------------- */
 const populateIssue = (query) => {
   return query
     .populate('user', 'firstName lastName _id')
@@ -67,351 +70,350 @@ const populateIssue = (query) => {
     });
 };
 
-// ✅ FIXED: Proper repost handling for frontend
+// Convert DB doc -> frontend format
 const toIssueResponse = (issueDoc) => {
-  const issueObj = issueDoc.toObject({ virtuals: true });
-  issueObj.repostedBy = (issueObj.reposts || []).map(u => u?._id?.toString() || u.toString());
-  delete issueObj.reposts;
-  return issueObj;
+  const obj = issueDoc.toObject({ virtuals: true });
+
+  obj.repostedBy = obj.reposts?.map((u) =>
+    u?._id?.toString() || u.toString()
+  );
+
+  delete obj.reposts;
+  return obj;
 };
 
-// 1. GET all issues (PUBLIC)
+/* -------------------------------------------------------------
+   1. GET ALL ISSUES (PUBLIC)
+------------------------------------------------------------- */
 router.get('/', async (req, res) => {
   try {
-    const page = parseInt(req.query.page || '1', 10);
-    const limit = parseInt(req.query.limit || '5', 10);
+    const page = parseInt(req.query.page || '1');
+    const limit = parseInt(req.query.limit || '5');
     const skip = (page - 1) * limit;
-    const category = req.query.category || '';
-    const location = req.query.location || '';
 
     const filter = {};
-    if (category) filter.category = category;
-    if (location) filter.location = { $regex: location, $options: 'i' };
+    if (req.query.category) filter.category = req.query.category;
+    if (req.query.location)
+      filter.location = { $regex: req.query.location, $options: 'i' };
 
     const total = await Issue.countDocuments(filter);
-    let issuesQuery = Issue.find(filter)
+
+    let query = Issue.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    issuesQuery = populateIssue(issuesQuery);
-    const issues = await issuesQuery;
+    query = populateIssue(query);
 
-    const issuesWithFlags = issues.map(toIssueResponse);
+    const issues = await query;
+    const formatted = issues.map(toIssueResponse);
 
     res.json({
       success: true,
-      data: issuesWithFlags,
+      data: formatted,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
       hasMore: page * limit < total,
     });
   } catch (error) {
-    console.error('Fetch issues error:', error);
+    console.error('Issues fetch error:', error);
     res.status(500).json({ success: false, message: 'Error fetching issues' });
   }
 });
 
-// 2. GET my issues (AUTH)
+/* -------------------------------------------------------------
+   2. GET MY ISSUES (AUTH REQUIRED)
+------------------------------------------------------------- */
 router.get('/my', auth, async (req, res) => {
   try {
-    let issuesQuery = Issue.find({ user: req.user._id }).sort({ createdAt: -1 });
-    issuesQuery = populateIssue(issuesQuery);
-    const issues = await issuesQuery;
+    let query = Issue.find({ user: req.user._id }).sort({ createdAt: -1 });
+    query = populateIssue(query);
 
-    const issuesWithFlags = issues.map(toIssueResponse);
-    res.json({ success: true, data: issuesWithFlags });
+    const issues = await query;
+    res.json({ success: true, data: issues.map(toIssueResponse) });
   } catch (error) {
-    console.error('Failed to fetch user issues:', error);
+    console.error('My issues error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch user issues' });
   }
 });
 
-// 3. GET my reposts (AUTH)
+/* -------------------------------------------------------------
+   3. GET MY REPOSTS (AUTH REQUIRED)
+------------------------------------------------------------- */
 router.get('/reposts/me', auth, async (req, res) => {
   try {
-    let issuesQuery = Issue.find({ reposts: req.user._id }).sort({ createdAt: -1 });
-    issuesQuery = populateIssue(issuesQuery);
-    const issues = await issuesQuery;
+    let query = Issue.find({ reposts: req.user._id }).sort({ createdAt: -1 });
+    query = populateIssue(query);
 
-    const issuesWithFlags = issues.map(toIssueResponse);
-    res.json({ success: true, data: issuesWithFlags });
+    const issues = await query;
+    res.json({ success: true, data: issues.map(toIssueResponse) });
   } catch (error) {
-    console.error('Failed to fetch reposted issues:', error);
+    console.error('Reposts fetch error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch reposted issues' });
   }
 });
 
-// 4. GET issue by ID
+/* -------------------------------------------------------------
+   4. GET SINGLE ISSUE BY ID
+------------------------------------------------------------- */
 router.get('/:id', async (req, res) => {
   try {
-    const issueQuery = Issue.findById(req.params.id);
-    const issue = await populateIssue(issueQuery);
+    const query = Issue.findById(req.params.id);
+    const issue = await populateIssue(query);
 
     if (!issue) {
       return res.status(404).json({ success: false, message: 'Issue not found' });
     }
 
-    const issueObj = toIssueResponse(issue);
-    res.json({ success: true, data: issueObj });
+    res.json({ success: true, data: toIssueResponse(issue) });
   } catch (error) {
-    console.error('Fetch issue by ID error:', error);
+    console.error('Single issue error:', error);
     res.status(500).json({ success: false, message: 'Error fetching issue' });
   }
 });
 
-// ✅ 5. POST create issue (FIXED: user field + media handling)
+/* -------------------------------------------------------------
+   5. CREATE ISSUE (AUTH REQUIRED)
+------------------------------------------------------------- */
 router.post(
   '/',
   auth,
   upload.array('media', 5),
   [
-    body('title').trim().notEmpty().withMessage('Title is required'),
-    body('description').trim().notEmpty().withMessage('Description is required'),
-    body('category').trim().notEmpty().withMessage('Category is required'),
-    body('location').trim().notEmpty().withMessage('Location is required'),
+    body('title').notEmpty(),
+    body('description').notEmpty(),
+    body('category').notEmpty(),
+    body('location').notEmpty(),
   ],
   async (req, res) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
+      const validation = validationResult(req);
+      if (!validation.isEmpty()) {
         return res.status(400).json({
           success: false,
           message: 'Validation failed',
-          errors: errors.array(),
+          errors: validation.array(),
         });
       }
 
-      // Upload files
-      const mediaUploadPromises = (req.files || []).map(uploadToCloudinary);
-      const mediaLinks = await Promise.all(mediaUploadPromises).catch(() => []);
+      const uploaded = await Promise.all(
+        (req.files || []).map(uploadToCloudinary)
+      ).catch(() => []);
 
-      // ✅ FIXED: Proper user field + all required fields
-      const issueData = {
+      const issue = new Issue({
         ...pickIssueFields(req.body),
-        user: req.user._id,  // ← CRITICAL: This was missing!
-        media: mediaLinks,
-      };
+        user: req.user._id,
+        media: uploaded,
+      });
 
-      const issue = new Issue(issueData);
       await issue.save();
 
-      const populatedIssue = await populateIssue(Issue.findById(issue._id));
-      const issueObj = toIssueResponse(populatedIssue);
-      
-      res.status(201).json({ success: true, data: issueObj });
+      const populated = await populateIssue(Issue.findById(issue._id));
+      res.status(201).json({ success: true, data: toIssueResponse(populated) });
     } catch (error) {
       console.error('Create issue error:', error);
-      res.status(500).json({ success: false, message: 'Error creating issue' });
+      res.status(500).json({ success: false, message: 'Issue creation failed' });
     }
   }
 );
 
-// 6. PUT update issue
+/* -------------------------------------------------------------
+   6. UPDATE ISSUE (AUTH REQUIRED)
+------------------------------------------------------------- */
 router.put(
   '/:id',
   auth,
   upload.array('media', 5),
   [
-    body('title').trim().notEmpty().withMessage('Title is required'),
-    body('description').trim().notEmpty().withMessage('Description is required'),
-    body('category').trim().notEmpty().withMessage('Category is required'),
-    body('location').trim().notEmpty().withMessage('Location is required'),
+    body('title').notEmpty(),
+    body('description').notEmpty(),
+    body('category').notEmpty(),
+    body('location').notEmpty(),
   ],
   async (req, res) => {
     try {
       const { id } = req.params;
-      let issue = await Issue.findById(id);
+      const issue = await Issue.findById(id);
 
-      if (!issue) {
-        return res.status(404).json({ success: false, message: 'Issue not found' });
-      }
+      if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
       if (issue.user.toString() !== req.user._id.toString()) {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
       }
 
-      const updatedFields = pickIssueFields(req.body);
-
-      // Handle media updates
+      // Parse existingMedia array sent from frontend
       let existingMedia = [];
       if (req.body.existingMedia) {
         try {
           existingMedia = JSON.parse(req.body.existingMedia);
-        } catch (e) {
-          console.warn('Could not parse existingMedia:', e);
-        }
+        } catch {}
       }
 
-      const mediaToDelete = issue.media.filter(filePath => 
-        filePath.startsWith('http') && !existingMedia.includes(filePath)
+      // Delete removed Cloudinary files
+      const toRemove = issue.media.filter(
+        (url) => url.startsWith('http') && !existingMedia.includes(url)
       );
 
-      const deletePromises = mediaToDelete.map(async (url) => {
-        const urlParts = url.split('/');
-        const publicId = urlParts.slice(-2).join('/').split('.')[0];
-        await cloudinary.uploader.destroy(publicId);
-      });
+      await Promise.all(
+        toRemove.map(async (url) => {
+          const parts = url.split('/');
+          const publicId = parts.slice(-2).join('/').split('.')[0];
+          await cloudinary.uploader.destroy(publicId);
+        })
+      ).catch(() => {});
 
-      await Promise.all(deletePromises).catch(console.warn);
+      // Upload new files
+      const uploaded = await Promise.all(
+        (req.files || []).map(uploadToCloudinary)
+      ).catch(() => []);
 
-      const newMediaPromises = (req.files || []).map(uploadToCloudinary);
-      const newMediaLinks = await Promise.all(newMediaPromises).catch(() => []);
-
-      updatedFields.media = [...existingMedia, ...newMediaLinks];
+      const updatedFields = {
+        ...pickIssueFields(req.body),
+        media: [...existingMedia, ...uploaded],
+      };
 
       Object.assign(issue, updatedFields);
       await issue.save();
 
-      const populatedIssue = await populateIssue(Issue.findById(issue._id));
-      const issueObj = toIssueResponse(populatedIssue);
-      
-      res.json({ success: true, data: issueObj });
+      const populated = await populateIssue(Issue.findById(issue._id));
+      res.json({ success: true, data: toIssueResponse(populated) });
     } catch (error) {
       console.error('Update issue error:', error);
-      res.status(500).json({ success: false, message: 'Error updating issue' });
+      res.status(500).json({ success: false, message: 'Issue update failed' });
     }
   }
 );
 
-// 7. DELETE issue
+/* -------------------------------------------------------------
+   7. DELETE ISSUE
+------------------------------------------------------------- */
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const issue = await Issue.findById(id);
+    const issue = await Issue.findById(req.params.id);
 
-    if (!issue) {
-      return res.status(404).json({ success: false, message: 'Issue not found' });
-    }
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
     if (issue.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    // Delete media
-    const deletePromises = issue.media.map(async (url) => {
-      const urlParts = url.split('/');
-      const publicId = urlParts.slice(-2).join('/').split('.')[0];
-      await cloudinary.uploader.destroy(publicId);
-    });
+    await Promise.all(
+      issue.media.map(async (url) => {
+        const parts = url.split('/');
+        const publicId = parts.slice(-2).join('/').split('.')[0];
+        await cloudinary.uploader.destroy(publicId);
+      })
+    ).catch(() => {});
 
-    await Promise.all(deletePromises).catch(console.warn);
-    await Issue.findByIdAndDelete(id);
-    
+    await Issue.findByIdAndDelete(req.params.id);
+
     res.json({ success: true, message: 'Issue deleted successfully' });
   } catch (error) {
     console.error('Delete issue error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting issue' });
+    res.status(500).json({ success: false, message: 'Issue deletion failed' });
   }
 });
 
-// 8. POST vote
+/* -------------------------------------------------------------
+   8. VOTE ISSUE
+------------------------------------------------------------- */
 router.post('/:id/vote', auth, async (req, res) => {
   try {
-    const { id } = req.params;
     const { isUpvote } = req.body;
 
     if (typeof isUpvote !== 'boolean') {
       return res.status(400).json({ success: false, message: 'isUpvote must be boolean' });
     }
 
-    let issue = await Issue.findById(id);
-    if (!issue) {
-      return res.status(404).json({ success: false, message: 'Issue not found' });
-    }
+    const issue = await Issue.findById(req.params.id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
-    const userIdString = req.user._id.toString();
-    issue.votes = issue.votes || [];
-    issue.upvotes = issue.upvotes || 0;
-    issue.downvotes = issue.downvotes || 0;
-
-    const existingIndex = issue.votes.findIndex(v => v.user.toString() === userIdString);
+    const uid = req.user._id.toString();
+    const existingIndex = issue.votes.findIndex((v) => v.user.toString() === uid);
 
     if (existingIndex !== -1) {
-      const existingVote = issue.votes[existingIndex];
-      
-      if (existingVote.isUpvote === isUpvote) {
-        // Unvote
-        if (existingVote.isUpvote) issue.upvotes -= 1;
-        else issue.downvotes -= 1;
+      const existing = issue.votes[existingIndex];
+
+      // Same vote → undo
+      if (existing.isUpvote === isUpvote) {
+        if (existing.isUpvote) issue.upvotes--;
+        else issue.downvotes--;
         issue.votes.splice(existingIndex, 1);
       } else {
         // Switch vote
-        if (existingVote.isUpvote) {
-          issue.upvotes -= 1;
-          issue.downvotes += 1;
+        if (existing.isUpvote) {
+          issue.upvotes--;
+          issue.downvotes++;
         } else {
-          issue.downvotes -= 1;
-          issue.upvotes += 1;
+          issue.downvotes--;
+          issue.upvotes++;
         }
-        existingVote.isUpvote = isUpvote;
+        existing.isUpvote = isUpvote;
       }
     } else {
       // New vote
       issue.votes.push({ user: req.user._id, isUpvote });
-      if (isUpvote) issue.upvotes += 1;
-      else issue.downvotes += 1;
+      if (isUpvote) issue.upvotes++;
+      else issue.downvotes++;
     }
 
     await issue.save();
-    const populatedIssue = await populateIssue(Issue.findById(issue._id));
-    const issueObj = toIssueResponse(populatedIssue);
-    
-    res.json({ success: true, data: issueObj });
+
+    const populated = await populateIssue(Issue.findById(issue._id));
+    res.json({ success: true, data: toIssueResponse(populated) });
   } catch (error) {
-    console.error('Vote issue error:', error);
-    res.status(500).json({ success: false, message: 'Error voting on issue' });
+    console.error('Vote error:', error);
+    res.status(500).json({ success: false, message: 'Vote failed' });
   }
 });
 
-// 9. POST repost toggle
+/* -------------------------------------------------------------
+   9. REPOST ISSUE (TOGGLE)
+------------------------------------------------------------- */
 router.post('/:id/repost', auth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const issue = await Issue.findById(id);
+    const issue = await Issue.findById(req.params.id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
-    if (!issue) {
-      return res.status(404).json({ success: false, message: 'Issue not found' });
-    }
+    const uid = req.user._id.toString();
+    const already = issue.reposts.some((u) => u.toString() === uid);
 
-    issue.reposts = issue.reposts || [];
-    const userId = req.user._id;
-    const alreadyReposted = issue.reposts.some(u => u.toString() === userId.toString());
-
-    if (alreadyReposted) {
-      issue.reposts.pull(userId);
+    if (already) {
+      issue.reposts.pull(req.user._id);
     } else {
-      issue.reposts.push(userId);
+      issue.reposts.push(req.user._id);
     }
 
     await issue.save();
 
-    const repostIds = issue.reposts.map(u => u.toString());
+    const repostIds = issue.reposts.map((u) => u.toString());
+
     res.json({
       success: true,
       data: {
         repostCount: repostIds.length,
-        repostedByUser: repostIds.includes(userId.toString()),
+        repostedByUser: repostIds.includes(uid),
       },
     });
   } catch (error) {
-    console.error('Repost issue error:', error);
-    res.status(500).json({ success: false, message: 'Error toggling repost status' });
+    console.error('Repost error:', error);
+    res.status(500).json({ success: false, message: 'Repost toggle failed' });
   }
 });
 
-// 10. POST comment
+/* -------------------------------------------------------------
+   10. COMMENT ON ISSUE
+------------------------------------------------------------- */
 router.post('/:id/comment', auth, async (req, res) => {
   try {
-    const { id } = req.params;
     const { text } = req.body;
 
-    if (!text || !text.trim()) {
+    if (!text?.trim()) {
       return res.status(400).json({ success: false, message: 'Comment text is required' });
     }
 
-    let issue = await Issue.findById(id);
-    if (!issue) {
-      return res.status(404).json({ success: false, message: 'Issue not found' });
-    }
+    const issue = await Issue.findById(req.params.id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
     issue.comments.push({
       user: req.user._id,
@@ -420,23 +422,20 @@ router.post('/:id/comment', auth, async (req, res) => {
     });
 
     await issue.save();
-    
-    // Populate last comment's user
-    const savedCommentIndex = issue.comments.length - 1;
+
+    const i = issue.comments.length - 1;
     await issue.populate({
-      path: `comments.${savedCommentIndex}.user`,
+      path: `comments.${i}.user`,
       select: 'firstName lastName _id',
     });
 
-    const populatedComment = issue.comments[savedCommentIndex];
-    
     res.json({
       success: true,
-      data: { comment: populatedComment },
+      data: { comment: issue.comments[i] },
     });
   } catch (error) {
-    console.error('Comment issue error:', error);
-    res.status(500).json({ success: false, message: 'Error adding comment' });
+    console.error('Comment error:', error);
+    res.status(500).json({ success: false, message: 'Comment failed' });
   }
 });
 

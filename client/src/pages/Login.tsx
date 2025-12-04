@@ -26,9 +26,6 @@ export function Login() {
 
     const { login, isAuthenticated, loading: authLoading } = useAuth();
 
-    // ---------------------------
-    // 🔄 Navigation after auth
-    // ---------------------------
     const redirectPath =
         (location.state as { from?: { pathname?: string } } | null)?.from
             ?.pathname || "/dashboard";
@@ -39,9 +36,6 @@ export function Login() {
         }
     }, [authLoading, isAuthenticated, navigate, redirectPath]);
 
-    // ---------------------------
-    // Form Change Handler
-    // ---------------------------
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
         setFormData({
@@ -52,9 +46,6 @@ export function Login() {
         setIsError(false);
     };
 
-    // ---------------------------
-    // Google Sign-In
-    // ---------------------------
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setFeedback(null);
@@ -94,9 +85,6 @@ export function Login() {
         }
     };
 
-    // ---------------------------
-    // Email/Password Login
-    // ---------------------------
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -134,9 +122,6 @@ export function Login() {
         }
     };
 
-    // ---------------------------
-    // RENDER
-    // ---------------------------
     return (
         <div className="max-w-md mx-auto mt-16">
             <div className="bg-white rounded-lg shadow-md p-8">
@@ -179,7 +164,6 @@ export function Login() {
                     <span>Sign in with Google</span>
                 </button>
 
-                {/* Divider */}
                 <div className="relative flex items-center mb-6">
                     <div className="flex-grow border-t border-gray-300"></div>
                     <span className="mx-4 text-gray-400 text-sm">Or</span>
@@ -203,6 +187,7 @@ export function Login() {
                                 placeholder="Enter your email"
                                 aria-label="Email"
                                 required
+                                autoComplete="email"   
                                 className="pl-10 w-full rounded-lg border"
                             />
                             <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
@@ -224,6 +209,7 @@ export function Login() {
                                 placeholder="Enter your password"
                                 aria-label="Password"
                                 required
+                                autoComplete="current-password"  
                                 className="pl-10 w-full rounded-lg border"
                             />
                             <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
@@ -240,6 +226,7 @@ export function Login() {
                                 checked={formData.rememberMe}
                                 onChange={handleChange}
                                 aria-label="Remember me"
+                                autoComplete="on"
                                 className="mr-2"
                             />
                             Remember me
@@ -265,7 +252,6 @@ export function Login() {
                     </button>
                 </form>
 
-                {/* Sign Up */}
                 <p className="text-center mt-6 text-sm">
                     Don’t have an account?{" "}
                     <Link to="/register" className="text-blue-600">

@@ -1,12 +1,6 @@
 // App.tsx
 
-import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
-// Layout Components
-import { Navbar } from './components/Navbar';
-import { Sidebar } from './components/Sidebar';
-import { Footer } from './components/Footer';
 
 // Pages
 import { Home } from './pages/Home';
@@ -28,83 +22,74 @@ import { ProfileProvider } from './context/ProfileContext';
 // Auth Guard
 import { RequireAuth } from './components/RequireAuth';
 
+// NEW — layout wrapper
+import { AppLayout } from './components/AppLayout';
+
 function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const closeSidebar = () => setIsSidebarOpen(false);
-
   return (
     <Router>
-      {/* 
-        =======================
-        GLOBAL PROVIDERS
-        =======================
-        AuthProvider must wrap everything.
-        ProfileProvider depends on AuthProvider (uses user/token).
-      */}
+      {/* =======================
+          GLOBAL PROVIDERS
+         ======================= */}
       <AuthProvider>
         <ProfileProvider>
-          <div className="min-h-screen bg-gray-50 flex flex-col">
-            
-            {/* Layout */}
-            <Navbar toggleSidebar={toggleSidebar} />
-            <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
 
-            <main className="flex-grow pt-16 p-8">
-              <Routes>
-                
-                {/* Public Pages */}
-                <Route path="/" element={<Home />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/feedback" element={<Feedback />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/terms" element={<TermsOfService />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
+          {/* =======================
+              GLOBAL LAYOUT WRAPPER
+             ======================= */}
+          <AppLayout>
 
-                {/* ========= Protected Routes ========= */}
-                <Route
-                  path="/upload"
-                  element={
-                    <RequireAuth>
-                      <Upload />
-                    </RequireAuth>
-                  }
-                />
+            <Routes>
 
-                <Route
-                  path="/profile"
-                  element={
-                    <RequireAuth>
-                      <Profile />
-                    </RequireAuth>
-                  }
-                />
+              {/* Public Pages */}
+              <Route path="/" element={<Home />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/feedback" element={<Feedback />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
 
-                <Route
-                  path="/profile/edit"
-                  element={
-                    <RequireAuth>
-                      <EditProfile />
-                    </RequireAuth>
-                  }
-                />
+              {/* ========= Protected Routes ========= */}
+              <Route
+                path="/upload"
+                element={
+                  <RequireAuth>
+                    <Upload />
+                  </RequireAuth>
+                }
+              />
 
-                <Route
-                  path="/issues/edit/:id"
-                  element={
-                    <RequireAuth>
-                      <EditPost />
-                    </RequireAuth>
-                  }
-                />
+              <Route
+                path="/profile"
+                element={
+                  <RequireAuth>
+                    <Profile />
+                  </RequireAuth>
+                }
+              />
 
-              </Routes>
-            </main>
+              <Route
+                path="/profile/edit"
+                element={
+                  <RequireAuth>
+                    <EditProfile />
+                  </RequireAuth>
+                }
+              />
 
-            <Footer />
-          </div>
+              <Route
+                path="/issues/edit/:id"
+                element={
+                  <RequireAuth>
+                    <EditPost />
+                  </RequireAuth>
+                }
+              />
+
+            </Routes>
+          </AppLayout>
+
         </ProfileProvider>
       </AuthProvider>
     </Router>

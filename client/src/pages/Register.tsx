@@ -30,7 +30,6 @@ export function Register() {
 
     const { login, isAuthenticated, loading: authLoading } = useAuth();
 
-    // 🔥 AUTO-REDIRECT ONLY AFTER AuthContext confirms login
     useEffect(() => {
         if (!authLoading && isAuthenticated) {
             navigate("/dashboard", { replace: true });
@@ -47,9 +46,7 @@ export function Register() {
         setIsError(false);
     };
 
-    // ==========================================================
     // GOOGLE SIGN-UP
-    // ==========================================================
     const handleGoogleSignUp = async () => {
         setLoading(true);
         setFeedback(null);
@@ -75,7 +72,6 @@ export function Register() {
             const data = await response.json();
             const { token, user } = data.data;
 
-            // DO NOT redirect manually — let AuthContext handle it
             login(token, user, true);
 
             setFeedback("Account created successfully!");
@@ -94,9 +90,7 @@ export function Register() {
         }
     };
 
-    // ==========================================================
-    // MANUAL SUBMIT
-    // ==========================================================
+    // MANUAL SIGN-UP
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFeedback(null);
@@ -144,7 +138,6 @@ export function Register() {
 
             const { token, user } = data.data;
 
-            // DO NOT navigate manually
             login(token, user, true);
 
             setFeedback("Account created successfully!");
@@ -157,9 +150,6 @@ export function Register() {
         }
     };
 
-    // ==========================================================
-    // RENDER
-    // ==========================================================
     return (
         <div className="max-w-2xl mx-auto mt-16 mb-16">
             <div className="bg-white rounded-lg shadow-md p-8">
@@ -194,14 +184,12 @@ export function Register() {
                     <span>Sign up with Google</span>
                 </button>
 
-                {/* Divider */}
                 <div className="relative flex items-center mb-6">
                     <div className="flex-grow border-t border-gray-300"></div>
                     <span className="mx-4 text-gray-400 text-sm">Or register manually</span>
                     <div className="flex-grow border-t border-gray-300"></div>
                 </div>
 
-                {/* FORM */}
                 <form onSubmit={handleSubmit} className="space-y-6">
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -220,6 +208,7 @@ export function Register() {
                                 aria-label="First name"
                                 value={formData.firstName}
                                 onChange={handleChange}
+                                autoComplete="given-name"     // ✅ FIX
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -238,6 +227,7 @@ export function Register() {
                                 aria-label="Last name"
                                 value={formData.lastName}
                                 onChange={handleChange}
+                                autoComplete="family-name"     // ✅ FIX
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -256,6 +246,7 @@ export function Register() {
                                 aria-label="Email"
                                 value={formData.email}
                                 onChange={handleChange}
+                                autoComplete="email"           // ✅ FIX
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -274,6 +265,7 @@ export function Register() {
                                 aria-label="Phone number"
                                 value={formData.phone}
                                 onChange={handleChange}
+                                autoComplete="tel"             // ✅ FIX
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -292,6 +284,7 @@ export function Register() {
                                 aria-label="Address"
                                 value={formData.address}
                                 onChange={handleChange}
+                                autoComplete="street-address"  // ✅ FIX
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -310,8 +303,8 @@ export function Register() {
                                 aria-label="Password"
                                 value={formData.password}
                                 onChange={handleChange}
+                                autoComplete="new-password"    // already correct
                                 className="mt-1 block w-full rounded-lg border-gray-300"
-                                autoComplete="new-password"
                             />
                         </div>
 
@@ -329,8 +322,8 @@ export function Register() {
                                 aria-label="Confirm password"
                                 value={formData.confirmPassword}
                                 onChange={handleChange}
+                                autoComplete="new-password"    // same autocomplete needed
                                 className="mt-1 block w-full rounded-lg border-gray-300"
-                                autoComplete="new-password"
                             />
                         </div>
                     </div>

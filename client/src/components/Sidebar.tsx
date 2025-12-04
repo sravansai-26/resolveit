@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+// src/components/Sidebar.tsx
+
 import { NavLink, useNavigate } from 'react-router-dom';
 import { X, Home, Upload, User, Info, MessageSquare, LogOut } from 'lucide-react';
 import { cn } from '../lib/utils';
-// 🟢 NEW: Import the central AuthContext
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,27 +12,13 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
-  // 🟢 NEW: Use centralized state and logic from useAuth()
-  const { isAuthenticated, logout } = useAuth();
-  
-  // NOTE: We no longer need the local useEffect or the useState for isAuthenticated
-  // as the data comes directly from AuthContext, which is the Single Source of Truth.
+  const { isAuthenticated, logout, loading } = useAuth();
 
-  // The simplified logout handler now uses the central context function
-  const handleLogout = () => {
-    // 1. Call the centralized logout function (handles Firebase, tokens, and storage)
-    logout(); 
-    
-    // 2. Close the sidebar immediately
-    onClose(); 
-    
-    // 3. The AuthContext should handle navigation, but as a robust fallback, 
-    // we can ensure the user is redirected, though the AuthProvider should manage this.
-    // If AuthProvider handles navigation, remove this line:
-    navigate('/login'); 
-    
-    // ⚠️ IMPORTANT: We remove window.location.reload() as it's no longer necessary 
-    // and defeats the purpose of React's state management.
+  // 🔥 FIX: Proper async logout
+  const handleLogout = async () => {
+    onClose(); // Close sidebar immediately (instant UX)
+    await logout(); // Wait for AuthContext cleanup
+    navigate("/login", { replace: true }); // Safe redirect
   };
 
   const navItems = [
@@ -42,6 +28,20 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { to: '/about', icon: Info, label: 'About Us', authRequired: false },
     { to: '/feedback', icon: MessageSquare, label: 'Feedback', authRequired: false },
   ];
+
+  // 🟢 Prevent flashing wrong state while AuthContext is loading
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "fixed top-0 left-0 h-full bg-white shadow-lg z-40 w-64 pt-16 flex items-center justify-center",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <span className="text-gray-500 text-sm">Checking session...</span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -61,7 +61,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <div className="p-6">
         <nav className="space-y-2">
           {navItems
-            .filter((item) => !item.authRequired || isAuthenticated) // Filters based on context state
+            .filter((item) => !item.authRequired || isAuthenticated)
             .map((item) => (
               <NavLink
                 key={item.to}
@@ -86,7 +86,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {isAuthenticated && (
         <div className="p-6 border-t">
           <button
-            onClick={handleLogout} // Calls the updated handler
+            onClick={handleLogout}
             className="flex items-center space-x-3 p-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-800 w-full"
             title="Logout"
           >

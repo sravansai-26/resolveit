@@ -1,4 +1,4 @@
-// index.js
+// index.js (FINAL, FULLY FIXED)
 
 import express from 'express';
 import mongoose from 'mongoose';
@@ -8,135 +8,133 @@ import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// 🟢 CRITICAL FIX: Use the simple, direct 'dotenv/config' import 
-import 'dotenv/config'; 
+// Load ENV
+import "dotenv/config";
 
-// --- CONFIGURATION LOADING ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// --- ROUTE IMPORTS ---
+// Routes
 import authRoutes from './routes/auth.js';
 import issueRoutes from './routes/issues.js';
 import userRoutes from './routes/users.js';
 import feedbackRoutes from './routes/feedback.js';
 
 const app = express();
-const PORT = process.env.PORT || 5000; 
+const PORT = process.env.PORT || 5000;
 
-// ------------------------------------------------------------------
-// CORS Configuration for Deployment Stability (FINAL FIX)
-// ------------------------------------------------------------------
+/* --------------------------------------------------------
+   FIX 1: Increase body limits (image/video upload safe)
+-------------------------------------------------------- */
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+/* --------------------------------------------------------
+   FIX 2: Serve uploads folder if needed
+-------------------------------------------------------- */
+app.use('/uploads', express.static(join(__dirname, 'uploads')));
+
+/* --------------------------------------------------------
+   FIX 3: Final CORS System
+-------------------------------------------------------- */
 
 const ALLOWED_ORIGINS = [
-    // 🛑 Vercel Production Domain (CRITICAL for live app)
-    'https://resolveit-welfare.vercel.app', 
-    // Localhost for Development (Vite default and Express default)
-    'http://localhost:5173', 
-    'http://localhost:5000',
-    'http://192.168.24.6:5000', // Your specific BASE_URL IP
+  "https://resolveit-welfare.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:5000",
+  "http://192.168.24.6:5000",
 ];
 
 const corsOptions = {
-    // 🛑 FINAL CORS FIX: Use a function for dynamic origin checking 
-    origin: function (origin, callback) {
-        // 1. Allow requests with no origin (Postman, server-to-server)
-        if (!origin) return callback(null, true); 
-        
-        // 2. Check for Vercel Preview Domains (safer check)
-        const isVercelPreview = origin.endsWith('.vercel.app') && !origin.includes('resolveit-welfare.vercel.app');
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
 
-        // 3. Check if the requesting origin is in our allowed list OR is a Vercel preview
-        const isAllowed = ALLOWED_ORIGINS.includes(origin) || isVercelPreview;
+    const isVercelSubdomain = origin.endsWith(".vercel.app");
 
-        if (isAllowed) {
-            callback(null, true);
-        } else {
-            // Log the failed origin for future debugging
-            console.error(`CORS BLOCKED: Origin ${origin} not allowed.`);
-            callback(new Error('Not allowed by CORS'), false);
-        }
-    }, 
-    credentials: true, // MUST BE TRUE for sending tokens/cookies
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    optionsSuccessStatus: 204 // Standard status for successful preflight
+    const isAllowed =
+      ALLOWED_ORIGINS.includes(origin) ||
+      isVercelSubdomain;
+
+    if (isAllowed) return callback(null, true);
+
+    console.warn("❌ CORS BLOCKED:", origin);
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
-// ✅ Middleware setup
+/* --------------------------------------------------------
+   Security + Logging
+-------------------------------------------------------- */
 app.use(helmet());
-app.use(express.json());
 
-// Logging middleware for development only
-if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev"));
 }
 
-// ------------------------------------------------------------------
-// MONGODB CONNECTION AND VALIDATION
-// ------------------------------------------------------------------
-
-// Validate required environment variables (including the Firebase one, implicitly)
+/* --------------------------------------------------------
+   MongoDB
+-------------------------------------------------------- */
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
-    console.error('Missing required environment variables (MONGODB_URI or JWT_SECRET)');
-    process.exit(1);
+  console.error("❌ Missing ENV variables");
+  process.exit(1);
 }
 
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('Connected to MongoDB'))
-    .catch((err) => {
-        console.error('MongoDB connection error:', err);
-        process.exit(1);
-    });
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => {
+    console.error("MongoDB Error:", err);
+    process.exit(1);
+  });
 
-// ✅ Health check route
-app.get('/', (req, res) => {
-    res.send('ResolveIt API is running');
-});
+/* --------------------------------------------------------
+   Routes
+-------------------------------------------------------- */
+app.get("/", (req, res) => res.send("ResolveIt API running"));
 
-// ------------------------------------------------------------------
-// ✅ API Routes (Consolidated)
-// ------------------------------------------------------------------
+app.use("/api/auth", authRoutes);
+app.use("/api/issues", issueRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
-app.use('/api/auth', authRoutes);
-app.use('/api/issues', issueRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/feedback', feedbackRoutes);
-
-// ✅ 404 route handler
+/* --------------------------------------------------------
+   404 Handler
+-------------------------------------------------------- */
 app.use((req, res) => {
-    res.status(404).json({ message: 'Not Found' });
+  res.status(404).json({ success: false, message: "Not Found" });
 });
 
-// ✅ Global error handler
+/* --------------------------------------------------------
+   Global Error Handler
+-------------------------------------------------------- */
 app.use((err, req, res, next) => {
-    console.error('Error:', err.stack);
-    res.status(500).json({
-        message: 'Something went wrong!',
-        // Only include the detailed error message in development mode
-        ...(process.env.NODE_ENV === 'development' && { error: err.message })
-    });
+  console.error("🔥 Server Error:", err);
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+    ...(process.env.NODE_ENV === "development" && { error: err.message }),
+  });
 });
 
-// ✅ Graceful shutdown handlers
-process.on('SIGINT', async () => {
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed');
-    process.exit(0);
+/* --------------------------------------------------------
+   Graceful Shutdown
+-------------------------------------------------------- */
+process.on("SIGINT", async () => {
+  await mongoose.connection.close();
+  console.log("MongoDB disconnected");
+  process.exit(0);
 });
 
-process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    process.exit(1);
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
 });
 
-process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled Rejection:', reason);
-    process.exit(1);
-});
-
-// ✅ Start server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+/* --------------------------------------------------------
+   Start Server
+-------------------------------------------------------- */
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

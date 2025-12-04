@@ -181,10 +181,6 @@ if (res.status === 401) {
                 );
            } catch (err: any) {
     console.error("Error loading issues:", err);
-    // 🟢 ADD THIS ONE LINE:
-    if (err.message?.includes("401") || err.message?.includes("token")) {
-        console.warn("Token issue detected, AuthContext will handle logout");
-    }
     setHasMore(false);
 } finally {
     setIsLoading(false);
@@ -323,8 +319,8 @@ if (res.status === 401) {
                     i._id === issue._id
                         ? {
                               ...i,
-                              repostCount: json.data.repostCount,
-                              repostedByUser: json.data.repostedByUser,
+   repostCount: json.data?.repostCount ?? i.repostCount ?? 0,
+  repostedByUser: json.data?.repostedByUser ?? !i.repostedByUser,
                           }
                         : i
                 )
@@ -450,7 +446,7 @@ if (res.status === 401) {
     }
 
     const renderIssueCard = (issue: Issue) => {
-        const imageUrl = issue.media?.[0] ? getMediaUrl(issue.media[0]) : "";
+      const imageUrl = issue.media?.[0] ? getMediaUrl(issue.media?.[0]) : "";
         const totalVotes = issue.upvotes + issue.downvotes;
         const upvotePercent =
             totalVotes > 0 ? (issue.upvotes / totalVotes) * 100 : 0;
@@ -597,9 +593,7 @@ if (res.status === 401) {
                                     <div key={comment._id} className="comment-item">
                                         <p className="comment-author">
                                             <strong>
-                                                {comment.user
-                                                    ? `${comment.user.firstName} ${comment.user.lastName}`
-                                                    : "Unknown"}
+                                               {comment.user ? `${comment.user.firstName} ${comment.user.lastName}` : "Anonymous"}
                                             </strong>
                                             <span className="comment-date">
                                                 {" "}

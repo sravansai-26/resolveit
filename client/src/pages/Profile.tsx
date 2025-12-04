@@ -6,7 +6,6 @@ import { useProfile } from "../context/ProfileContext";
 
 // ======================================================================
 // ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for media paths
-// This ensures images/videos stored on the Render backend are visible.
 // ======================================================================
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
@@ -16,15 +15,13 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
  * @returns The full absolute URL.
  */
 const getMediaUrl = (path: string): string => {
-    // If the path is already a full URL (e.g., from a future cloud storage solution), return it.
     if (path.startsWith('http') || path.startsWith('blob:')) {
         return path;
     }
-    // Prepend the API Base URL to the relative path.
-    // Ensure there is only one slash between the base URL and the path.
-    return `${API_BASE_URL}/${path.startsWith('/') ? path.slice(1) : path}`;
-};
 
+    // 🔥 FIX: Remove double leading slashes to prevent NotSameOrigin + 404
+    return `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
+};
 
 export function Profile() {
     const navigate = useNavigate();
@@ -76,7 +73,8 @@ export function Profile() {
         );
     }
 
-    if (!user) {
+    // 🔥 FIX 1: Prevents false “User data not available” errors after refresh
+    if (!user || !user._id) {
         return (
             <div className="text-center py-10 text-gray-700" role="alert">
                 User data not available. Please login.
@@ -91,20 +89,18 @@ export function Profile() {
     }
 
     // ----------------------------------------------------
-    // AVATAR PATH CALCULATION (CRITICAL FIX)
+    // AVATAR PATH CALCULATION
     // ----------------------------------------------------
-    const defaultAvatar = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200";
-    
-    // 🟢 FIX: If user.avatar exists, use the helper function to get the full URL.
-    const avatarSrc = user.avatar 
+    const defaultAvatar =
+        "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200";
+
+    const avatarSrc = user.avatar
         ? getMediaUrl(user.avatar)
         : defaultAvatar;
-
 
     // ----------------------------------------------------
     // HANDLERS
     // ----------------------------------------------------
-
     const handleDeleteConfirmed = async (issueId: string) => {
         if (deleting) return;
         setDeleting(true);
@@ -141,18 +137,18 @@ export function Profile() {
         });
 
     // ----------------------------------------------------
-    // MEDIA RENDERER (CRITICAL FIX)
+    // MEDIA RENDERER (Critical Fix)
     // ----------------------------------------------------
-    const renderMediaGallery = (media: string[]) => {
+    // 🔥 FIX 2: give default empty array → prevents crash on undefined media
+    const renderMediaGallery = (media: string[] = []) => {
         if (!media || media.length === 0) return null;
 
         return (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {media.map((file, idx) => {
                     const isVideo = file.match(/\.(mp4|webm|ogg)$/i);
-                    
-                    // 🟢 FIX: Use the helper function for the full media URL
-                    const src = getMediaUrl(file); 
+
+                    const src = getMediaUrl(file);
 
                     return isVideo ? (
                         <video
@@ -261,10 +257,16 @@ export function Profile() {
 
                                 <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
                                     <time>{formatDate(issue.createdAt)}</time>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium 
-                                        ${issue.status === 'Resolved' ? 'bg-green-100 text-green-800' : 
-                                          issue.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' : 
-                                          'bg-red-100 text-red-800'}`}>
+                                    <span
+                                        className={`px-2 py-1 rounded-full text-xs font-medium 
+                                        ${
+                                            issue.status === "Resolved"
+                                                ? "bg-green-100 text-green-800"
+                                                : issue.status === "In Progress"
+                                                ? "bg-yellow-100 text-yellow-800"
+                                                : "bg-red-100 text-red-800"
+                                        }`}
+                                    >
                                         Status: {issue.status}
                                     </span>
                                 </div>
