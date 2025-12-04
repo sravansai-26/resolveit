@@ -225,8 +225,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
 
       // 🟢 FIXED: json.data → json.data (PUT endpoint returns data)
-      setUser(json.data);
-      saveUserToStorage(json.data);
+     setUser(json.data);  // ← Might be json.data for PUT endpoint
+saveUserToStorage(json.data);
       alert("Profile updated successfully!");
     } catch (err: any) {
       console.error("Profile update error:", err);
