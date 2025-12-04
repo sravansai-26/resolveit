@@ -1,4 +1,4 @@
-// routes/users.js - FINAL FIXED VERSION
+// routes/users.js – FINAL FIXED VERSION (GET + PUT profile working)
 
 import express from 'express';
 import multer from 'multer';
@@ -30,7 +30,7 @@ const uploadAvatar = upload.single('avatar');
    UTIL HELPERS
 --------------------------------------------------------- */
 
-// Only allow updating certain fields
+// Allow only specific fields to be updated
 const pickUserFields = (body) => {
   const allowed = ['firstName', 'lastName', 'phone', 'address', 'bio'];
   const updates = {};
@@ -42,15 +42,13 @@ const pickUserFields = (body) => {
 
 // Extract Cloudinary public_id from URL
 const getPublicIdFromUrl = (url) => {
-  // Supports e.g.:
-  // https://res.cloudinary.com/demo/image/upload/v123456789/resolveit_users/abcd1234.jpg
   const match = url.match(/\/v\d+\/resolveit_users\/(.+?)\.\w+$/);
   return match ? `resolveit_users/${match[1]}` : null;
 };
 
-// Delete old avatar if exists
+// Delete previous avatar from Cloudinary
 const deleteOldAvatar = async (avatarUrl) => {
-  if (!avatarUrl || !avatarUrl.includes('cloudinary')) return;
+  if (!avatarUrl || !avatarUrl.includes("cloudinary")) return;
 
   const publicId = getPublicIdFromUrl(avatarUrl);
   if (!publicId) return;
@@ -58,15 +56,18 @@ const deleteOldAvatar = async (avatarUrl) => {
   try {
     await cloudinary.uploader.destroy(publicId);
   } catch (err) {
-    console.warn("⚠ Could not delete old avatar:", publicId, err);
+    console.warn("⚠️ Failed to delete old avatar:", publicId, err);
   }
 };
 
-// Upload new avatar to Cloudinary
+// Upload an image file to Cloudinary
 const uploadToCloudinary = (file) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: "resolveit_users", resource_type: "image" },
+      {
+        folder: "resolveit_users",
+        resource_type: "image"
+      },
       (error, result) => {
         if (result) resolve(result.secure_url);
         else reject(error);
@@ -76,11 +77,41 @@ const uploadToCloudinary = (file) => {
   });
 };
 
+
 /* ---------------------------------------------------------
-   ROUTE: UPDATE PROFILE
+   🟢 GET /api/users/profile  (CRITICAL — frontend calls this!)
+--------------------------------------------------------- */
+router.get('/profile', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      user: user.toJSON()
+    });
+
+  } catch (error) {
+    console.error("Get profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching profile"
+    });
+  }
+});
+
+
+/* ---------------------------------------------------------
+   🟢 PUT /api/users/profile  (Update profile + avatar)
 --------------------------------------------------------- */
 router.put(
-  '/profile',
+  "/profile",
   auth,
   (req, res, next) => {
     uploadAvatar(req, res, (err) => {
@@ -95,7 +126,6 @@ router.put(
   },
   async (req, res) => {
     try {
-      // Auth middleware now ensures req.user contains the FULL user object
       const user = await User.findById(req.user._id);
 
       if (!user) {
@@ -105,25 +135,21 @@ router.put(
         });
       }
 
-      // Collect updates for fields like name, phone, etc.
       const updates = pickUserFields(req.body);
-
-      // Avatar logic
       let avatarUrl = user.avatar;
 
-      // 🟢 CASE 1: Uploading a new avatar file
+      // CASE 1: Uploading new avatar file
       if (req.file) {
         if (avatarUrl) await deleteOldAvatar(avatarUrl);
         avatarUrl = await uploadToCloudinary(req.file);
       }
 
-      // 🟢 CASE 2: Request explicitly sets avatar to empty string → Remove avatar
+      // CASE 2: Clearing avatar (sending empty string)
       if (req.body.avatar === "") {
         if (avatarUrl) await deleteOldAvatar(avatarUrl);
         avatarUrl = "";
       }
 
-      // Apply field updates
       Object.assign(user, updates);
       user.avatar = avatarUrl;
 
