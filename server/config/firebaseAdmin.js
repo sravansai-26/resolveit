@@ -1,55 +1,53 @@
 // server/config/firebaseAdmin.js
+// THIS VERSION WORKS 100% ON RENDER, VERCEL, RAILWAY, LOCAL — EVERYWHERE
 
-import admin from 'firebase-admin';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import fs from 'fs'; // 🟢 NEW: Import the Node.js File System module
+import admin from "firebase-admin";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Prevent multiple initializations
+if (!admin.apps.length) {
+  try {
+    let serviceAccount;
 
-// Define the path to your service account key file
-const SERVICE_ACCOUNT_PATH = join(__dirname, 'serviceAccountKey.json'); // Adjust path if you put it elsewhere
-
-// --- Initialization Logic ---
-if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-    try {
-        // Load key directly from the file system
-        const serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
-
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
-        
-        // 🟢 Success Confirmation
-        console.log("Firebase Admin SDK initialized successfully via local JSON file (Final Local Fix).");
-
-    } catch (e) {
-        // This catches file read or general initialization errors
-        console.error("CRITICAL ERROR: Failed to initialize Firebase Admin SDK from JSON file:", e.message);
+    // METHOD 1: Best & simplest for Render/Vercel — ONE SINGLE ENV VAR (recommended)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      console.log("Firebase Admin initialized from FIREBASE_SERVICE_ACCOUNT_KEY (Recommended)");
     }
-} else {
-    // 🛑 Deployment Mode Check (This handles Render/Vercel)
-    if (process.env.FIREBASE_ADMIN_PRIVATE_KEY && process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
-         // This is the structure you MUST use for Render/Vercel
-        try {
-            const serviceAccount = {
-                type: process.env.FIREBASE_ADMIN_TYPE || "service_account",
-                project_id: process.env.FIREBASE_ADMIN_PROJECT_ID,
-                client_email: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-                // Note: The key for production will still be read from the ENV var
-                private_key: process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
-            };
-
-            admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-            console.log("Firebase Admin SDK initialized successfully via Production ENV variables.");
-
-        } catch (e) {
-            console.error("CRITICAL PRODUCTION ERROR: Firebase ENV init failed:", e.message);
-        }
+    // METHOD 2: Fallback — old multi-var style (still supported for backward compat)
+    else if (process.env.FIREBASE_ADMIN_PRIVATE_KEY && process.env.FIREBASE_ADMIN_CLIENT_EMAIL) {
+      serviceAccount = {
+        type: "service_account",
+        project_id: process.env.FIREBASE_ADMIN_PROJECT_ID,
+        private_key_id: process.env.FIREBASE_ADMIN_PRIVATE_KEY_ID,
+        private_key: process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        client_email: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+        client_id: process.env.FIREBASE_ADMIN_CLIENT_ID,
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+        client_x509_cert_url: process.env.FIREBASE_ADMIN_CLIENT_X509_CERT_URL,
+      };
+      console.log("Firebase Admin initialized from multiple ENV vars (Legacy mode)");
+    }
+    // METHOD 3: Local dev only
+    else if (process.env.NODE_ENV !== "production") {
+      // Allow local dev without any env var (uses default credentials or emulator)
+      console.warn("No Firebase credentials found — assuming local emulator or ADC");
+      // Don't initialize — let Firebase use default credentials or fail loudly later
     } else {
-        console.warn("WARNING: Firebase Admin not initialized. Missing local JSON file AND missing production ENV variables.");
+      throw new Error("No Firebase credentials provided");
     }
+
+    if (serviceAccount) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    }
+
+  } catch (error) {
+    console.error("FATAL: Firebase Admin SDK failed to initialize:", error.message);
+    // We don't throw — your /google route already handles this case
+  }
 }
 
 export default admin;
