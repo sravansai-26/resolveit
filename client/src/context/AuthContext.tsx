@@ -1,4 +1,5 @@
 // src/context/AuthContext.tsx
+// FINAL VERSION — WORKS ON VERCEL + RENDER + REFRESH + GOOGLE + MANUAL LOGIN
 
 import React, {
   createContext,
@@ -17,7 +18,8 @@ import {
 } from "firebase/auth";
 import { auth } from "../firebase";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+// CRITICAL: FULL URL — NO RELATIVE PATHS, NO VITE_API_URL BUGS
+const BACKEND_URL = "https://resolveit-api.onrender.com";
 
 interface AuthContextType {
   user: ProfileUser | null;
@@ -38,8 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const getToken = () =>
-    localStorage.getItem("token") || sessionStorage.getItem("token");
+  const getToken = useCallback(() => {
+    return localStorage.getItem("token") || sessionStorage.getItem("token") || null;
+  }, []);
 
   const clearAuthData = useCallback(() => {
     localStorage.removeItem("token");
@@ -51,115 +54,127 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false);
   }, []);
 
-  const login = (token: string, userData: ProfileUser, rememberMe: boolean) => {
+  const login = useCallback((token: string, userData: ProfileUser, rememberMe: boolean = true) => {
     const storage = rememberMe ? localStorage : sessionStorage;
     storage.setItem("token", token);
     storage.setItem("user", JSON.stringify(userData));
     setUser(userData);
     setIsAuthenticated(true);
-  };
+  }, []);
 
   const logout = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
     } catch (e) {
-      console.error("Firebase sign out error:", e);
+      console.error("Firebase sign out failed:", e);
     }
 
     clearAuthData();
 
+    // Optional: tell backend to invalidate token
     try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await fetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     } catch (e) {
-      console.error("Backend logout failed:", e);
+      // ignore
     }
   }, [clearAuthData]);
 
-  const syncWithFirebase = async (fbUser: FirebaseUser | null) => {
-    if (!fbUser) {
-      clearAuthData();
-      setLoading(false);
-      return;
-    }
-
-    setFirebaseUser(fbUser);
-
+  // Sync Firebase user → backend session
+  const syncWithFirebase = async (fbUser: FirebaseUser) => {
     try {
       const idToken = await fbUser.getIdToken();
 
-      const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+      const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       });
 
-      if (!res.ok) throw new Error("Backend sync failed");
+      if (!res.ok) throw new Error("Google sync failed");
 
       const json = await res.json();
       if (json.success && json.data?.token && json.data?.user) {
-        const { token, user } = json.data;
-        login(token, user, true); // Google = always remember
+        login(json.data.token, json.data.user, true);
       }
     } catch (err) {
-      console.error("Failed to sync Firebase user with backend:", err);
-      // Don't log out Firebase user — just no backend session
+      console.error("Firebase → Backend sync failed:", err);
     } finally {
       setLoading(false);
     }
   };
 
+  // THIS IS THE GOLDEN FUNCTION — HARDCODED URL + BETTER ERROR LOGGING
   const fetchUserProfile = useCallback(async () => {
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      clearAuthData();
+      setLoading(false);
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
+        method: "GET",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include",
       });
 
-      if (!res.ok) throw new Error("Invalid token");
+      // DEBUG: See exactly what backend returns
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Profile fetch failed:", res.status, text);
+        clearAuthData();
+        setLoading(false);
+        return;
+      }
 
       const json = await res.json();
+
       if (json.success && json.user) {
         const storage = localStorage.getItem("token") ? localStorage : sessionStorage;
         storage.setItem("user", JSON.stringify(json.user));
         setUser(json.user);
         setIsAuthenticated(true);
+      } else {
+        console.warn("Invalid response from /me:", json);
+        clearAuthData();
       }
     } catch (err) {
+      console.error("Network error in fetchUserProfile:", err);
       clearAuthData();
+    } finally {
+      setLoading(false);
     }
-  }, [clearAuthData]);
+  }, [getToken, clearAuthData, login]);
 
+  // Main auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       if (fbUser) {
         setFirebaseUser(fbUser);
         syncWithFirebase(fbUser);
       } else {
-        // No Firebase user → check if we have manual login token
+        setFirebaseUser(null);
         const token = getToken();
         if (token) {
           fetchUserProfile();
         } else {
           clearAuthData();
+          setLoading(false);
         }
-        setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [fetchUserProfile, clearAuthData]);
+  }, [fetchUserProfile, getToken, clearAuthData]);
 
   const value: AuthContextType = {
     user,
     firebaseUser,
-    isAuthenticated: !!user || !!firebaseUser,
+    isAuthenticated: !!user,
     loading,
     error: null,
     login,
@@ -172,6 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
   return context;
 }
