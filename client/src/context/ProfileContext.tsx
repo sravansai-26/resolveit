@@ -1,4 +1,4 @@
-// src/context/ProfileContext.tsx – FINAL, FULLY FIXED & STABILIZED
+// src/context/ProfileContext.tsx — FINAL, ERROR-FREE VERSION
 
 import React, {
   createContext,
@@ -9,7 +9,10 @@ import React, {
   useCallback,
 } from "react";
 
+import { useAuth } from "./AuthContext";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 
 // ==================== TYPES ====================
 export type User = {
@@ -39,7 +42,7 @@ export type Issue = {
   upvotes: number;
   downvotes: number;
   status?: "Pending" | "In Progress" | "Resolved";
-  user: string;
+  user: string | User;
   emailSent: boolean;
   createdAt: string;
   updatedAt: string;
@@ -48,10 +51,13 @@ export type Issue = {
 export interface ProfileContextType {
   user: User | null;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
+
   issues: Issue[];
   setIssues: React.Dispatch<React.SetStateAction<Issue[]>>;
+
   reposts: Issue[];
   setReposts: React.Dispatch<React.SetStateAction<Issue[]>>;
+
   loading: boolean;
   error: string | null;
 
@@ -67,57 +73,34 @@ export interface ProfileContextType {
 // ==================== CONTEXT ====================
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
-// Helper to check token source
 const getToken = () =>
   localStorage.getItem("token") || sessionStorage.getItem("token");
 
-const saveUserToStorage = (user: User) => {
-  const local = localStorage.getItem("token");
-  const storage = local ? localStorage : sessionStorage;
-  storage.setItem("user", JSON.stringify(user));
-};
-
 // ==================== PROVIDER ====================
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const { user: authUser, isAuthenticated, fetchUserProfile } = useAuth();
+
+  const [user, setUser] = useState<User | null>(authUser);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [reposts, setReposts] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
 
-  // ==================== FETCH USER PROFILE ====================
+  // Keep ProfileContext.user synced with AuthContext.user
+  useEffect(() => {
+    setUser(authUser ?? null);
+  }, [authUser]);
+
+  // ==================== FETCH PROFILE ====================
   const fetchProfile = useCallback(async () => {
-    const token = getToken();
-    if (!token) {
-      setUser(null);
-      return;
-    }
+    if (!isAuthenticated) return;
+    await fetchUserProfile();
+  }, [isAuthenticated, fetchUserProfile]);
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const json = await res.json();
-
-      if (res.ok && json.success && json.user) {
-        setUser(json.user);
-        saveUserToStorage(json.user);
-      } else {
-        setError(json.message || "Could not fetch profile.");
-      }
-    } catch (err) {
-      console.error("Profile fetch error:", err);
-      setError("Failed to fetch profile.");
-    }
-  }, []);
-
-  // ==================== FETCH USER ISSUES ====================
+  // ==================== FETCH ISSUES ====================
   const fetchIssues = useCallback(async () => {
     const token = getToken();
-    if (!token) {
+    if (!token || !isAuthenticated) {
       setIssues([]);
       return;
     }
@@ -134,16 +117,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       } else {
         setIssues([]);
       }
-    } catch (err) {
-      console.error("Issues fetch error:", err);
+    } catch {
       setIssues([]);
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  // ==================== FETCH USER REPOSTS ====================
+  // ==================== FETCH REPOSTS ====================
   const fetchReposts = useCallback(async () => {
     const token = getToken();
-    if (!token) {
+    if (!token || !isAuthenticated) {
       setReposts([]);
       return;
     }
@@ -160,41 +142,38 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       } else {
         setReposts([]);
       }
-    } catch (err) {
-      console.error("Reposts fetch error:", err);
+    } catch {
       setReposts([]);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // ==================== UPDATE PROFILE ====================
   const updateProfile = useCallback(
     async (data: Partial<User>, avatarFile?: File) => {
       const token = getToken();
-      if (!token) return alert("Authentication required.");
+      if (!token || !isAuthenticated) return alert("Authentication required.");
 
       try {
         const form = new FormData();
 
-        Object.entries(data).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            form.append(key, value as string);
+        Object.entries(data).forEach(([k, v]) => {
+          if (v !== undefined && v !== null) {
+            form.append(k, v as string);
           }
         });
 
         if (avatarFile) form.append("avatar", avatarFile);
 
-      const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
-  method: "PUT",
-  headers: { Authorization: `Bearer ${token}` },
-  body: form,
-});
-
+        const res = await fetch(`${API_BASE_URL}/api/users/me`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
 
         const json = await res.json();
 
-        if (res.ok && json.success && json.user) {
-          setUser(json.user);
-          saveUserToStorage(json.user);
+        if (res.ok && json.success) {
+          await fetchUserProfile(); // refresh authenticated user
           alert("Profile updated successfully!");
         } else {
           alert(json.message || "Failed to update profile.");
@@ -204,84 +183,69 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         alert("Error updating profile.");
       }
     },
-    []
+    [isAuthenticated, fetchUserProfile]
   );
 
   // ==================== DELETE ISSUE ====================
-  const deleteIssue = useCallback(async (id: string) => {
-    const token = getToken();
-    if (!token) throw new Error("No token found.");
+  const deleteIssue = useCallback(
+    async (id: string) => {
+      const token = getToken();
+      if (!token || !isAuthenticated) throw new Error("Not authenticated.");
 
-    const res = await fetch(`${API_BASE_URL}/api/issues/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) throw new Error(json.message || "Could not delete issue.");
-
-    setIssues((prev) => prev.filter((i) => i._id !== id));
-    setReposts((prev) => prev.filter((i) => i._id !== id));
-  }, []);
-
-  // ==================== TOGGLE REPOST ====================
-  const toggleRepost = useCallback(async (id: string) => {
-    const token = getToken();
-    if (!token) return;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/issues/${id}/repost`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
+      const res = await fetch(`${API_BASE_URL}/api/issues/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Failed to delete issue.");
 
-      if (!res.ok) throw new Error(json.message);
+      setIssues((prev) => prev.filter((i) => i._id !== id));
+      setReposts((prev) => prev.filter((i) => i._id !== id));
+    },
+    [isAuthenticated]
+  );
 
-      // Remove from reposts list when toggled
-      setReposts((prev) => prev.filter((r) => r._id !== id));
-    } catch (err) {
-      console.error("Toggle repost error:", err);
-    }
-  }, []);
+  // ==================== TOGGLE REPOST ====================
+  const toggleRepost = useCallback(
+    async (id: string) => {
+      const token = getToken();
+      if (!token || !isAuthenticated) return;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/issues/${id}/repost`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message);
+
+        setReposts((prev) => prev.filter((r) => r._id !== id));
+      } catch (err) {
+        console.error("Toggle repost error:", err);
+      }
+    },
+    [isAuthenticated]
+  );
 
   // ==================== INITIAL LOAD ====================
   useEffect(() => {
-    let mounted = true;
-
     const init = async () => {
-      const token = getToken();
-      const stored = localStorage.getItem("user") || sessionStorage.getItem("user");
-
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed?._id) setUser(parsed);
-        } catch {
-          localStorage.removeItem("user");
-        }
-      }
-
-      if (token) {
+      if (isAuthenticated) {
         await fetchProfile();
         await fetchIssues();
         await fetchReposts();
       }
-
-      if (mounted) setLoading(false);
+      setLoading(false);
     };
 
     init();
-    return () => {
-      mounted = false;
-    };
-  }, [fetchProfile, fetchIssues, fetchReposts]);
+  }, [isAuthenticated, fetchProfile, fetchIssues, fetchReposts]);
 
   // ==================== RETURN CONTEXT ====================
   return (
@@ -308,7 +272,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ==================== HOOK ====================
 export function useProfile() {
   const ctx = useContext(ProfileContext);
   if (!ctx) throw new Error("useProfile must be used inside ProfileProvider");

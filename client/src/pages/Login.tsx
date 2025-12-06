@@ -1,19 +1,21 @@
 // src/pages/Login.tsx
+// FINAL, STABLE, OPTION-B VERSION — USES VITE_API_URL + CORRECT REDIRECT + FULL LOGGING
 
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Mail, Lock } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { LogIn, Mail, Lock } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "../firebase";
 
+// ✅ USE THE ENVIRONMENT VARIABLE YOU SET (.env → VITE_API_URL)
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function Login() {
     const [formData, setFormData] = useState({
-        email: '',
-        password: '',
+        email: "",
+        password: "",
         rememberMe: false,
     });
 
@@ -26,26 +28,34 @@ export function Login() {
 
     const { login, isAuthenticated, loading: authLoading } = useAuth();
 
-    const redirectPath =
-        (location.state as { from?: { pathname?: string } } | null)?.from
-            ?.pathname || "/dashboard";
+    // 🚀 ALWAYS redirect to /profile — stable & predictable
+    const redirectPath = "/profile";
 
+    // If user already logged in → auto redirect
     useEffect(() => {
         if (!authLoading && isAuthenticated) {
             navigate(redirectPath, { replace: true });
         }
     }, [authLoading, isAuthenticated, navigate, redirectPath]);
 
+    // ===========================================================
+    // HANDLE INPUT CHANGE
+    // ===========================================================
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
+
         setFormData({
             ...formData,
-            [name]: type === 'checkbox' ? checked : value,
+            [name]: type === "checkbox" ? checked : value,
         });
+
         setFeedback(null);
         setIsError(false);
     };
 
+    // ===========================================================
+    // GOOGLE LOGIN
+    // ===========================================================
     const handleGoogleSignIn = async () => {
         setLoading(true);
         setFeedback(null);
@@ -71,13 +81,19 @@ export function Login() {
             const data = await response.json();
             const { token, user } = data.data;
 
-            login(token, user, true);
+            login(token, user, true); // Always remember Google sign-in
 
             setFeedback("Google sign-in successful!");
+
+            // Redirect immediately
+            navigate("/profile", { replace: true });
+
         } catch (error: any) {
             let msg = "Google sign-in failed.";
+
             if (error?.code === "auth/popup-closed-by-user") msg = "Popup closed.";
             if (error?.code === "auth/network-request-failed") msg = "Network error.";
+
             setFeedback(msg);
             setIsError(true);
         } finally {
@@ -85,6 +101,9 @@ export function Login() {
         }
     };
 
+    // ===========================================================
+    // MANUAL LOGIN
+    // ===========================================================
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -114,6 +133,10 @@ export function Login() {
             login(token, user, formData.rememberMe);
 
             setFeedback("Login successful!");
+
+            // Redirect immediately
+            navigate("/profile", { replace: true });
+
         } catch (err: any) {
             setIsError(true);
             setFeedback("Network error. Try again.");
@@ -122,6 +145,9 @@ export function Login() {
         }
     };
 
+    // ===========================================================
+    // UI
+    // ===========================================================
     return (
         <div className="max-w-md mx-auto mt-16">
             <div className="bg-white rounded-lg shadow-md p-8">
@@ -156,11 +182,7 @@ export function Login() {
                     className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg shadow text-sm bg-white border hover:bg-gray-100 mb-6"
                     disabled={loading}
                 >
-                    <img
-                        src="/google-logo.svg"
-                        alt="Google logo"
-                        className="h-5 w-5"
-                    />
+                    <img src="/google-logo.svg" alt="Google logo" className="h-5 w-5" />
                     <span>Sign in with Google</span>
                 </button>
 
@@ -187,7 +209,7 @@ export function Login() {
                                 placeholder="Enter your email"
                                 aria-label="Email"
                                 required
-                                autoComplete="email"   
+                                autoComplete="email"
                                 className="pl-10 w-full rounded-lg border"
                             />
                             <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
@@ -209,7 +231,7 @@ export function Login() {
                                 placeholder="Enter your password"
                                 aria-label="Password"
                                 required
-                                autoComplete="current-password"  
+                                autoComplete="current-password"
                                 className="pl-10 w-full rounded-lg border"
                             />
                             <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
@@ -226,16 +248,12 @@ export function Login() {
                                 checked={formData.rememberMe}
                                 onChange={handleChange}
                                 aria-label="Remember me"
-                                autoComplete="on"
                                 className="mr-2"
                             />
                             Remember me
                         </label>
 
-                        <Link
-                            to="/forgot-password"
-                            className="text-sm text-blue-600"
-                        >
+                        <Link to="/forgot-password" className="text-sm text-blue-600">
                             Forgot password?
                         </Link>
                     </div>

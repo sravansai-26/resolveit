@@ -314,11 +314,17 @@ export function Upload() {
             </div>
             <p className="text-xs text-gray-500">Images and videos up to 300MB</p>
           </div>
-          {/* Invisible overlay for drop area activation */}
-          {dragActive && <div className="absolute inset-0 z-10" onDrop={handleDrop}></div>}
-        </div>
+  {/* Invisible overlay for drop area activation */}
+  {dragActive && (
+    <div
+      className="absolute inset-0 z-10"
+      onDrop={handleDrop}
+      role="presentation"
+    />
+  )}
+</div>
 
-        {/* List selected files */}
+{/* List selected files */}
         {formData.media.length > 0 && (
           <div className="mt-4 space-y-2">
             <p className="text-sm font-medium text-gray-700">Attached Media ({formData.media.length}):</p>

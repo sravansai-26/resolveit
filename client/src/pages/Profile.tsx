@@ -1,12 +1,10 @@
-// src/pages/Profile.tsx
+// src/pages/Profile.tsx — FINAL COMPLETE FIXED VERSION
+
 import React, { useState } from "react";
 import { Settings, MapPin, Mail, Phone, Edit, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useProfile } from "../context/ProfileContext";
 
-// ======================================================================
-// ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for media paths
-// ======================================================================
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 /**
@@ -15,18 +13,24 @@ const API_BASE_URL = import.meta.env.VITE_API_URL;
  * @returns The full absolute URL.
  */
 const getMediaUrl = (path: string): string => {
-    if (path.startsWith('http') || path.startsWith('blob:')) {
-        return path;
-    }
+    if (!path) return "";
+    if (path.startsWith("http") || path.startsWith("blob:")) return path;
 
-    // 🔥 FIX: Remove double leading slashes to prevent NotSameOrigin + 404
     return `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
 };
 
 export function Profile() {
     const navigate = useNavigate();
-    const { user, issues, reposts, loading, error, deleteIssue, toggleRepost } =
-        useProfile();
+
+    const {
+        user,
+        issues,
+        reposts,
+        loading,
+        error,
+        deleteIssue,
+        toggleRepost,
+    } = useProfile();
 
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -52,12 +56,12 @@ export function Profile() {
                         r="10"
                         stroke="currentColor"
                         strokeWidth="4"
-                    ></circle>
+                    />
                     <path
                         className="opacity-75"
                         fill="currentColor"
                         d="M4 12a8 8 0 018-8v8z"
-                    ></path>
+                    />
                 </svg>
                 <p className="mt-2 text-gray-700">Loading your profile...</p>
             </div>
@@ -73,7 +77,7 @@ export function Profile() {
         );
     }
 
-    // 🔥 FIX 1: Prevents false “User data not available” errors after refresh
+    // Prevent false "User not available" after refresh
     if (!user || !user._id) {
         return (
             <div className="text-center py-10 text-gray-700" role="alert">
@@ -94,15 +98,14 @@ export function Profile() {
     const defaultAvatar =
         "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200";
 
-    const avatarSrc = user.avatar
-        ? getMediaUrl(user.avatar)
-        : defaultAvatar;
+    const avatarSrc = user.avatar ? getMediaUrl(user.avatar) : defaultAvatar;
 
     // ----------------------------------------------------
     // HANDLERS
     // ----------------------------------------------------
     const handleDeleteConfirmed = async (issueId: string) => {
         if (deleting) return;
+
         setDeleting(true);
         try {
             await deleteIssue(issueId);
@@ -117,6 +120,7 @@ export function Profile() {
     const handleRemoveRepost = async (issueId: string) => {
         if (!window.confirm("Remove this repost?")) return;
         if (unreposting) return;
+
         setUnreposting(true);
         try {
             await toggleRepost(issueId);
@@ -137,17 +141,15 @@ export function Profile() {
         });
 
     // ----------------------------------------------------
-    // MEDIA RENDERER (Critical Fix)
+    // MEDIA RENDERER (no crashes on undefined media)
     // ----------------------------------------------------
-    // 🔥 FIX 2: give default empty array → prevents crash on undefined media
     const renderMediaGallery = (media: string[] = []) => {
         if (!media || media.length === 0) return null;
 
         return (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {media.map((file, idx) => {
-                    const isVideo = file.match(/\.(mp4|webm|ogg)$/i);
-
+                    const isVideo = /\.[mp4|webm|ogg]+$/i.test(file);
                     const src = getMediaUrl(file);
 
                     return isVideo ? (
@@ -157,7 +159,6 @@ export function Profile() {
                             controls
                             className="rounded-md object-cover w-full max-h-48"
                             preload="metadata"
-                            aria-label={`Video media ${idx + 1}`}
                         />
                     ) : (
                         <img
@@ -177,16 +178,19 @@ export function Profile() {
 
             {/* ====================== PROFILE HEADER ====================== */}
             <section className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-                <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+                <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600" />
                 <div className="px-6 py-4">
                     <div className="flex items-start">
+
                         <img
                             src={avatarSrc}
                             alt="Profile avatar"
                             className="w-24 h-24 rounded-full border-4 border-white -mt-12 object-cover"
                         />
+
                         <div className="ml-4 flex-1">
                             <div className="flex items-center justify-between">
+
                                 <div>
                                     <h1 className="text-2xl font-bold text-gray-900">
                                         {user.firstName} {user.lastName}
@@ -196,18 +200,18 @@ export function Profile() {
                                     </p>
                                 </div>
 
-                                {/* EDIT PROFILE BUTTON */}
                                 <button
                                     onClick={() => navigate("/profile/edit")}
                                     className="flex items-center space-x-2 px-4 py-2 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200"
-                                    aria-label="Edit Profile"
                                 >
                                     <Settings size={20} />
                                     <span>Edit Profile</span>
                                 </button>
+
                             </div>
 
                             <div className="mt-4 flex flex-wrap gap-4 text-gray-600">
+
                                 <div className="flex items-center">
                                     <MapPin size={16} className="mr-1" />
                                     <span>{user.address || "Address not provided"}</span>
@@ -222,6 +226,7 @@ export function Profile() {
                                     <Phone size={16} className="mr-1" />
                                     <span>{user.phone || "Phone number not provided"}</span>
                                 </div>
+
                             </div>
                         </div>
                     </div>
@@ -230,23 +235,17 @@ export function Profile() {
 
             {/* ====================== MY REPORTS ====================== */}
             <section className="mb-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                    My Reports
-                </h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">My Reports</h2>
 
                 {issues.length === 0 ? (
-                    <p className="text-center text-gray-500">
-                        You haven't posted any reports yet.
-                    </p>
+                    <p className="text-center text-gray-500">You haven't posted any reports yet.</p>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6" role="list">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {issues.map((issue) => (
-                            <article
-                                key={issue._id}
-                                className="bg-white rounded-lg shadow-md p-4 relative"
-                                role="listitem"
-                            >
+                            <article key={issue._id} className="bg-white rounded-lg shadow-md p-4 relative">
+
                                 <h3 className="font-semibold text-gray-900">{issue.title}</h3>
+
                                 <span className="inline-block bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full mt-2">
                                     {issue.category}
                                 </span>
@@ -257,8 +256,9 @@ export function Profile() {
 
                                 <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
                                     <time>{formatDate(issue.createdAt)}</time>
+
                                     <span
-                                        className={`px-2 py-1 rounded-full text-xs font-medium 
+                                        className={`px-2 py-1 rounded-full text-xs font-medium
                                         ${
                                             issue.status === "Resolved"
                                                 ? "bg-green-100 text-green-800"
@@ -271,13 +271,12 @@ export function Profile() {
                                     </span>
                                 </div>
 
-                                {/* BUTTONS */}
                                 <div className="absolute top-2 right-2 flex space-x-2">
+
                                     <button
                                         onClick={() => navigate(`/issues/edit/${issue._id}`)}
                                         className="p-1 rounded hover:bg-gray-200"
                                         title="Edit Issue"
-                                        aria-label="Edit Issue"
                                     >
                                         <Edit size={18} />
                                     </button>
@@ -286,12 +285,13 @@ export function Profile() {
                                         onClick={() => setConfirmDeleteId(issue._id)}
                                         className="p-1 rounded hover:bg-red-200 text-red-600"
                                         title="Delete Issue"
-                                        aria-label="Delete Issue"
                                         disabled={deleting}
                                     >
                                         <Trash2 size={18} />
                                     </button>
+
                                 </div>
+
                             </article>
                         ))}
                     </div>
@@ -300,20 +300,15 @@ export function Profile() {
 
             {/* ====================== DELETE CONFIRM MODAL ====================== */}
             {confirmDeleteId && (
-                <div
-                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-                    role="dialog"
-                    aria-modal="true"
-                >
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-lg">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                            Confirm Deletion
-                        </h3>
-                        <p className="mb-6">
-                            Are you sure you want to delete this report? This cannot be undone.
-                        </p>
+
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Deletion</h3>
+
+                        <p className="mb-6">Are you sure you want to delete this report? This cannot be undone.</p>
 
                         <div className="flex justify-end space-x-4">
+
                             <button
                                 onClick={() => setConfirmDeleteId(null)}
                                 className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
@@ -328,29 +323,26 @@ export function Profile() {
                             >
                                 {deleting ? "Deleting..." : "Delete"}
                             </button>
+
                         </div>
+
                     </div>
                 </div>
             )}
 
             {/* ====================== MY REPOSTS ====================== */}
             <section className="mb-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                    My Reposts
-                </h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">My Reposts</h2>
 
                 {reposts.length === 0 ? (
-                    <p className="text-center text-gray-500">
-                        You haven't reposted anything yet.
-                    </p>
+                    <p className="text-center text-gray-500">You haven't reposted anything yet.</p>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {reposts.map((issue) => (
-                            <article
-                                key={issue._id}
-                                className="bg-white rounded-lg shadow-md p-4 relative"
-                            >
+                            <article key={issue._id} className="bg-white rounded-lg shadow-md p-4 relative">
+
                                 <h3 className="font-semibold text-gray-900">{issue.title}</h3>
+
                                 <span className="inline-block bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full mt-2">
                                     {issue.category}
                                 </span>
@@ -367,13 +359,13 @@ export function Profile() {
                                     <button
                                         onClick={() => handleRemoveRepost(issue._id)}
                                         className="p-1 rounded hover:bg-red-200 text-red-600"
-                                        title="Remove Repost"
-                                        aria-label="Remove Repost"
                                         disabled={unreposting}
+                                        title="Remove Repost"
                                     >
                                         <Trash2 size={18} />
                                     </button>
                                 </div>
+
                             </article>
                         ))}
                     </div>

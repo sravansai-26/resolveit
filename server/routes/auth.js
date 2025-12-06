@@ -174,34 +174,31 @@ router.post("/login", validateLogin, async (req, res) => {
 // GET PROFILE (/me)
 // =========================
 router.get("/me", auth, async (req, res) => {
-  try {
-    // req.user is populated by the 'auth' middleware
-    const user = req.user; 
+  try {
+    const user = req.user;
 
-    if (!user) {
-      // Fallback error if auth middleware passed but req.user is null/undefined
-      return res.status(401).json({ 
-        success: false,
-        message: "Authentication failed to retrieve user data.",
-      });
-    }
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication failed to retrieve user data.",
+      });
+    }
 
-    // Prevent Render caching
-    res.set("Cache-Control", "no-store");
+    res.set("Cache-Control", "no-store");
 
-    // Send the user object directly from the middleware (which already excludes password)
-    return res.json({
-      success: true,
-      user: user.toJSON(),
-    });
-  } catch (err) {
-    console.error("Me route error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
+    return res.json({
+      success: true,
+      user: user.toJSON(),
+    });
+  } catch (err) {
+    console.error("Me route error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
 });
+
 
 // =========================
 // GOOGLE LOGIN / SIGNUP - 🚀 THE FIX IS HERE 🚀

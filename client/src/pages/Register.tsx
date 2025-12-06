@@ -1,4 +1,5 @@
 // src/pages/Register.tsx
+// FINAL, CORRECTED, ENDPOINT-SAFE, REDIRECT-SAFE VERSION
 
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -30,9 +31,10 @@ export function Register() {
 
     const { login, isAuthenticated, loading: authLoading } = useAuth();
 
+    // 🔥 FIX: redirect to /profile, not /dashboard
     useEffect(() => {
         if (!authLoading && isAuthenticated) {
-            navigate("/dashboard", { replace: true });
+            navigate("/profile", { replace: true });
         }
     }, [authLoading, isAuthenticated, navigate]);
 
@@ -75,6 +77,9 @@ export function Register() {
             login(token, user, true);
 
             setFeedback("Account created successfully!");
+
+            // 🔥 FIX — redirect after signup
+            navigate("/profile", { replace: true });
 
         } catch (error: any) {
             let message = "Google sign-up failed.";
@@ -142,6 +147,9 @@ export function Register() {
 
             setFeedback("Account created successfully!");
 
+            // 🔥 FIX — redirect after register
+            navigate("/profile", { replace: true });
+
         } catch (error: any) {
             setIsError(true);
             setFeedback("Network error. Try again.");
@@ -208,7 +216,7 @@ export function Register() {
                                 aria-label="First name"
                                 value={formData.firstName}
                                 onChange={handleChange}
-                                autoComplete="given-name"     // ✅ FIX
+                                autoComplete="given-name"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -227,7 +235,7 @@ export function Register() {
                                 aria-label="Last name"
                                 value={formData.lastName}
                                 onChange={handleChange}
-                                autoComplete="family-name"     // ✅ FIX
+                                autoComplete="family-name"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -246,7 +254,7 @@ export function Register() {
                                 aria-label="Email"
                                 value={formData.email}
                                 onChange={handleChange}
-                                autoComplete="email"           // ✅ FIX
+                                autoComplete="email"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -265,7 +273,7 @@ export function Register() {
                                 aria-label="Phone number"
                                 value={formData.phone}
                                 onChange={handleChange}
-                                autoComplete="tel"             // ✅ FIX
+                                autoComplete="tel"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -284,7 +292,7 @@ export function Register() {
                                 aria-label="Address"
                                 value={formData.address}
                                 onChange={handleChange}
-                                autoComplete="street-address"  // ✅ FIX
+                                autoComplete="street-address"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -303,7 +311,7 @@ export function Register() {
                                 aria-label="Password"
                                 value={formData.password}
                                 onChange={handleChange}
-                                autoComplete="new-password"    // already correct
+                                autoComplete="new-password"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
@@ -322,7 +330,7 @@ export function Register() {
                                 aria-label="Confirm password"
                                 value={formData.confirmPassword}
                                 onChange={handleChange}
-                                autoComplete="new-password"    // same autocomplete needed
+                                autoComplete="new-password"
                                 className="mt-1 block w-full rounded-lg border-gray-300"
                             />
                         </div>
