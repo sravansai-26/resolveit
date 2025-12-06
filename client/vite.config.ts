@@ -3,9 +3,10 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  appType: "spa",   // 🔥 THIS LINE FIXES 404 ON REFRESH
   build: {
-    outDir: "dist",        // ensure dist is created in project root
-    emptyOutDir: true,     // clean old builds
+    outDir: "dist",
+    emptyOutDir: true,
   },
   server: {
     host: true,
