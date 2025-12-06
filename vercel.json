@@ -8,10 +8,10 @@
       }
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/client/dist/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
