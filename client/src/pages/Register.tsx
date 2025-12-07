@@ -8,8 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from '../lib/api';
 
 export function Register() {
     const [formData, setFormData] = useState({
@@ -60,18 +59,9 @@ export function Register() {
 
             setFeedback("Verifying Google token...");
 
-            const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idToken }),
-            });
+            const response = await api.post('/auth/google', { idToken });
 
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.message || "Google verification failed.");
-            }
-
-            const data = await response.json();
+            const data = response.data;
             const { token, user } = data.data;
 
             login(token, user, true);
@@ -85,6 +75,7 @@ export function Register() {
             let message = "Google sign-up failed.";
             if (error?.code === "auth/popup-closed-by-user") message = "Popup closed.";
             if (error?.code === "auth/network-request-failed") message = "Network error.";
+            if (error?.response?.data?.message) message = error.response.data.message;
 
             console.error("Google Sign-Up Error:", error);
 
@@ -116,30 +107,16 @@ export function Register() {
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    email: formData.email,
-                    password: formData.password,
-                    phone: formData.phone,
-                    address: formData.address,
-                }),
+            const response = await api.post('/auth/register', {
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                email: formData.email,
+                password: formData.password,
+                phone: formData.phone,
+                address: formData.address,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                setIsError(true);
-                setFeedback(
-                    data.errors
-                        ? data.errors.map((err: any) => err.msg).join("; ")
-                        : data.message || "Registration failed."
-                );
-                return;
-            }
+            const data = response.data;
 
             const { token, user } = data.data;
 
@@ -152,7 +129,11 @@ export function Register() {
 
         } catch (error: any) {
             setIsError(true);
-            setFeedback("Network error. Try again.");
+            const data = error.response?.data;
+            const msg = data?.errors
+                        ? data.errors.map((err: any) => err.msg).join("; ")
+                        : data?.message || "Registration failed.";
+            setFeedback(msg);
         } finally {
             setLoading(false);
         }

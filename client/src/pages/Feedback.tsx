@@ -2,19 +2,13 @@
 
 import { useState } from 'react';
 import { Send } from 'lucide-react';
-// ❌ REMOVED: import axios from 'axios';
-// We are consolidating to the native Fetch API for consistency.
+import api from '../lib/api';
 
 interface FeedbackData {
   type: string;
   subject: string;
   message: string;
 }
-
-// ======================================================================
-// ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B)
-// ======================================================================
-const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export function Feedback() {
   const [feedback, setFeedback] = useState<FeedbackData>({
@@ -53,35 +47,18 @@ export function Feedback() {
 
     setLoading(true);
     try {
-      const token = getToken(); 
-      
       // 🟢 CRITICAL FIX: Switched to native Fetch API
-      const res = await fetch(
-        `${API_BASE_URL}/api/feedback`, 
-        {
-          method: 'POST',
-          headers: {
-            // Note: The backend should handle the case where the token is absent (for guest feedback)
-            'Authorization': token ? `Bearer ${token}` : '', 
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(feedback)
-        }
-      );
+      const res = await api.post('/feedback', feedback);
 
-      // Try to parse JSON response regardless of status, as the server might send a JSON error message
-      const responseData = await res.json().catch(() => ({})); 
+      const responseData = res.data;
 
-      if (res.ok) { // Check for status 200-299
-        setSubmitStatus(responseData.message || 'Thank you for your feedback! It has been submitted successfully.');
-        setFeedback({ type: '', subject: '', message: '' });
-      } else {
-        // Use the error message from the response body if available, or a generic status message
-        setError(responseData.message || `Failed to submit feedback. Status: ${res.status}.`);
-      }
-    } catch (err) {
+      setSubmitStatus(responseData.message || 'Thank you for your feedback! It has been submitted successfully.');
+      setFeedback({ type: '', subject: '', message: '' });
+
+    } catch (err: any) {
       console.error('Feedback submit error:', err);
-      setError('A network error occurred. Please check your connection or try again.');
+      const msg = err.response?.data?.message || `Failed to submit feedback. Status: ${err.response?.status || 'Unknown'}.`;
+      setError(msg);
     } finally {
       setLoading(false);
     }

@@ -2,14 +2,7 @@
 
 import React, { useEffect, useState, ChangeEvent, FormEvent, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-// ❌ REMOVED: import axios from "axios"; 
-// We are consolidating to the native Fetch API for consistency.
-
-// ======================================================================
-// ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for all calls.
-// NO RELATIVE PATHS are allowed here.
-// ======================================================================
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../lib/api";
 
 interface Issue {
   _id: string;
@@ -36,7 +29,7 @@ const getMediaUrl = (path: string): string => {
         return path;
     }
     const normalizedPath = path.startsWith('/') ? path.slice(1) : path;
-    return `${API_BASE_URL}/${normalizedPath}`;
+    return `${import.meta.env.VITE_API_URL}/${normalizedPath}`;
 };
 
 export function EditPost() {
@@ -78,18 +71,9 @@ export function EditPost() {
 
       try {
         // 🟢 CRITICAL FIX: Use ABSOLUTE URL
-        const response = await fetch(`${API_BASE_URL}/api/issues/${id}`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await api.get(`/issues/${id}`);
 
-        // Check for non-OK status first
-        if (!response.ok) {
-            const errorJson = await response.json().catch(() => ({ message: `Server error: ${response.status}` }));
-            throw new Error(errorJson.message || `Failed to fetch issue. Status: ${response.status}`);
-        }
-
-        const responseData = await response.json();
+        const responseData = response.data;
 
         if (responseData.success) {
             const data: Issue = responseData.data;
@@ -108,7 +92,8 @@ export function EditPost() {
       } catch (err: any) {
         console.error("Failed to fetch issue:", err);
         // Consolidated error setting
-        setError(err.message || "Network error while loading issue.");
+        const msg = err.response?.data?.message || err.message || "Network error while loading issue.";
+        setError(msg);
         setLoading(false);
       }
     }
@@ -173,23 +158,7 @@ export function EditPost() {
       if (!token) throw new Error("Authentication required.");
 
       // 🟢 CRITICAL FIX: Use ABSOLUTE URL and Fetch API
-      const response = await fetch(`${API_BASE_URL}/api/issues/${id}`, {
-        method: "PUT",
-        headers: { 
-            Authorization: `Bearer ${token}` 
-            // ❌ DO NOT set Content-Type: browser handles 'multipart/form-data'
-        },
-        body: formData,
-      });
-
-      // Check for non-OK status
-      if (!response.ok) {
-        const errorJson = await response.json().catch(() => ({ message: `Server error: ${response.status}` }));
-        throw new Error(errorJson.message || "Issue update failed.");
-      }
-      
-      // We don't need to read the body if we just check for response.ok
-      // const responseData = await response.json(); 
+      const response = await api.put(`/issues/${id}`, formData);
 
       alert("Issue updated successfully!");
 
@@ -197,7 +166,8 @@ export function EditPost() {
       navigate("/profile", { replace: true }); 
     } catch (err: any) {
       console.error("Issue update failed:", err);
-      setError(err.message || "Network error while updating issue.");
+      const msg = err.response?.data?.message || err.message || "Network error while updating issue.";
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

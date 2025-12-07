@@ -3,11 +3,11 @@
 import { useState, useRef } from "react";
 import { Upload as UploadIcon, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "../lib/api";
 
 // ======================================================================
 // ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for all calls.
 // ======================================================================
-const API_BASE_URL = import.meta.env.VITE_API_URL;
 const MAX_FILE_SIZE_BYTES = 300 * 1024 * 1024; // 300MB, as per your server config
 
 const categories = [
@@ -146,31 +146,17 @@ export function Upload() {
       }
 
       // 🟢 CRITICAL FIX: Use API_BASE_URL for the API call
-      const response = await fetch(`${API_BASE_URL}/api/issues/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // ❌ DO NOT set Content-Type for FormData
-        },
-        body: formPayload,
-      });
-
-      if (!response.ok) {
-        // Try to read JSON error body, handle unexpected end of JSON
-        const errorData = await response.json().catch(() => ({ 
-            message: `Server error: Status ${response.status}. Non-JSON response.`
-        }));
-        throw new Error(errorData.message || "Failed to create issue.");
-      }
+      const response = await api.post('/issues/', formPayload);
 
       // Success
       alert("Issue reported successfully!");
       // 🟢 Objective 4: Test successful feature operation
       navigate("/profile", { replace: true }); // Navigate to profile to see the new report
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Issue submission error:", err);
-      setError(err instanceof Error ? err.message : "Unexpected error occurred during submission.");
+      const msg = err.response?.data?.message || err.message || "Unexpected error occurred during submission.";
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

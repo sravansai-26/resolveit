@@ -13,8 +13,7 @@ import {
 
 import "/src/home.css";
 import { useAuth } from "../context/AuthContext";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../lib/api";
 
 const categories: string[] = [
     "Road Infrastructure",
@@ -68,7 +67,7 @@ const getMediaUrl = (path: string): string => {
     if (!path) return "";
     if (path.startsWith("http")) return path;
     const normalizedPath = path.replace(/^\/+/, "");
-    return `${API_BASE_URL}/${normalizedPath}`;
+    return `${import.meta.env.VITE_API_URL}/${normalizedPath}`;
 };
 
 export function Home() {
@@ -112,30 +111,20 @@ export function Home() {
             setIsLoading(true);
 
             try {
-                const url = new URL(`${API_BASE_URL}/api/issues`);
-                url.searchParams.append("page", pageNumber.toString());
-                url.searchParams.append("limit", "5");
+                console.log("🔵 Fetching issues...");
 
-                if (filters.category) url.searchParams.append("category", filters.category);
-                if (filters.location) url.searchParams.append("location", filters.location);
-
-                console.log("🔵 Fetching:", url.toString());
-
-                const res = await fetch(url.toString(), { 
-                    headers,
-                    credentials: 'include' // IMPORTANT for cross-origin auth
+                const res = await api.get('/issues', {
+                    params: {
+                        page: pageNumber,
+                        limit: 5,
+                        category: filters.category || undefined,
+                        location: filters.location || undefined
+                    }
                 });
 
                 console.log("🔵 Issues response status:", res.status);
 
-                // For public access, 401 is acceptable
-                if (!res.ok && res.status !== 401) {
-                    const errorText = await res.text();
-                    console.error("❌ Issues fetch failed:", errorText);
-                    throw new Error(`HTTP ${res.status}`);
-                }
-
-                const json = await res.json();
+                const json = res.data;
 
                 if (!json.success || !Array.isArray(json.data)) {
                     console.error("❌ Invalid response structure:", json);
@@ -284,21 +273,7 @@ export function Home() {
 
         try {
             console.log("🔵 Sending vote to server...");
-            const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/vote`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                credentials: 'include',
-                body: JSON.stringify({ isUpvote }),
-            });
-
-            if (!res.ok) {
-                const error = await res.text();
-                console.error("❌ Vote failed:", error);
-                throw new Error("Vote failed");
-            }
+            await api.post(`/issues/${issueId}/vote`, { isUpvote });
 
             console.log("✅ Vote successful");
         } catch (err) {
@@ -328,19 +303,11 @@ export function Home() {
 
         try {
             console.log("🔵 Sending repost to server...");
-            const res = await fetch(`${API_BASE_URL}/api/issues/${issue._id}/repost`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                credentials: 'include',
-                body: JSON.stringify({}),
-            });
+            const res = await api.post(`/issues/${issue._id}/repost`, {});
 
-            const json = await res.json();
+            const json = res.data;
             
-            if (!res.ok || !json.success) {
+            if (!json.success) {
                 console.error("❌ Repost failed:", json.message);
                 throw new Error(json.message);
             }
@@ -389,19 +356,11 @@ export function Home() {
 
         try {
             console.log("🔵 Sending comment to server...");
-            const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/comment`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                credentials: 'include',
-                body: JSON.stringify({ text }),
-            });
+            const res = await api.post(`/issues/${issueId}/comment`, { text });
 
-            const json = await res.json();
+            const json = res.data;
             
-            if (!res.ok || !json.success) {
+            if (!json.success) {
                 console.error("❌ Comment failed:", json.message);
                 throw new Error(json.message);
             }

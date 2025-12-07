@@ -10,8 +10,7 @@ import React, {
 } from "react";
 
 import { useAuth } from "./AuthContext";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../lib/api";
 
 // ==================== TYPES ====================
 export type User = {
@@ -133,24 +132,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     try {
       console.log("🔵 Calling GET /api/issues/my");
 
-      const res = await fetch(`${API_BASE_URL}/api/issues/my`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        credentials: 'include', // IMPORTANT for cross-origin auth
-      });
+      const res = await api.get('/issues/my');
 
       console.log("🔵 Issues response status:", res.status);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("❌ Issues fetch failed:", errorText);
-        setIssues([]);
-        return;
-      }
-
-      const json = await res.json();
+      const json = res.data;
 
       if (json.success && Array.isArray(json.data)) {
         console.log("✅ Issues loaded:", json.data.length);
@@ -179,24 +165,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     try {
       console.log("🔵 Calling GET /api/issues/reposts/me");
 
-      const res = await fetch(`${API_BASE_URL}/api/issues/reposts/me`, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        credentials: 'include',
-      });
+      const res = await api.get('/issues/reposts/me');
 
       console.log("🔵 Reposts response status:", res.status);
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("❌ Reposts fetch failed:", errorText);
-        setReposts([]);
-        return;
-      }
-
-      const json = await res.json();
+      const json = res.data;
 
       if (json.success && Array.isArray(json.data)) {
         console.log("✅ Reposts loaded:", json.data.length);
@@ -242,23 +215,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
         console.log("🔵 Calling PUT /api/users/me");
 
-        const res = await fetch(`${API_BASE_URL}/api/users/me`, {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-          body: form,
-        });
+        const res = await api.put('/users/me', form);
 
         console.log("🔵 Update response status:", res.status);
 
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error("❌ Update failed:", errorText);
-          alert("Failed to update profile.");
-          return;
-        }
-
-        const json = await res.json();
+        const json = res.data;
 
         if (json.success) {
           console.log("✅ Profile updated successfully");
@@ -268,9 +229,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           console.error("❌ Update failed:", json.message);
           alert(json.message || "Failed to update profile.");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("❌ Update profile error:", err);
-        alert("Error updating profile.");
+        const message = err.response?.data?.message || "Error updating profile.";
+        alert(message);
       }
     },
     [isAuthenticated, fetchUserProfile]
@@ -290,34 +252,25 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       console.log("🔵 Calling DELETE /api/issues/" + id);
 
-      const res = await fetch(`${API_BASE_URL}/api/issues/${id}`, {
-        method: "DELETE",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        credentials: 'include',
-      });
+      try {
+        const res = await api.delete(`/issues/${id}`);
+        console.log("🔵 Delete response status:", res.status);
+        const json = res.data;
+        
+        if (!json.success) {
+            console.error("❌ Delete failed:", json.message);
+            throw new Error(json.message || "Failed to delete issue.");
+        }
 
-      console.log("🔵 Delete response status:", res.status);
+        console.log("✅ Issue deleted successfully");
 
-      if (!res.ok) {
-        const errorText = await res.text();
+        setIssues((prev) => prev.filter((i) => i._id !== id));
+        setReposts((prev) => prev.filter((i) => i._id !== id));
+      } catch (err: any) {
+        const errorText = err.response?.data?.message || err.message || "Failed to delete issue.";
         console.error("❌ Delete failed:", errorText);
-        throw new Error("Failed to delete issue.");
+        throw new Error(errorText);
       }
-
-      const json = await res.json();
-      
-      if (!json.success) {
-        console.error("❌ Delete failed:", json.message);
-        throw new Error(json.message || "Failed to delete issue.");
-      }
-
-      console.log("✅ Issue deleted successfully");
-
-      setIssues((prev) => prev.filter((i) => i._id !== id));
-      setReposts((prev) => prev.filter((i) => i._id !== id));
     },
     [isAuthenticated]
   );
@@ -337,25 +290,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       try {
         console.log("🔵 Calling POST /api/issues/" + id + "/repost");
 
-        const res = await fetch(`${API_BASE_URL}/api/issues/${id}/repost`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          credentials: 'include',
-          body: JSON.stringify({}),
-        });
+        const res = await api.post(`/issues/${id}/repost`, {});
 
         console.log("🔵 Repost response status:", res.status);
 
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error("❌ Repost toggle failed:", errorText);
-          throw new Error("Failed to toggle repost");
-        }
-
-        const json = await res.json();
+        const json = res.data;
         
         if (!json.success) {
           console.error("❌ Repost toggle failed:", json.message);
@@ -365,8 +304,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         console.log("✅ Repost toggled successfully");
 
         setReposts((prev) => prev.filter((r) => r._id !== id));
-      } catch (err) {
-        console.error("❌ Toggle repost error:", err);
+      } catch (err: any) {
+        const errorText = err.response?.data?.message || err.message || "Failed to toggle repost";
+        console.error("❌ Toggle repost error:", errorText);
       }
     },
     [isAuthenticated]
@@ -397,19 +337,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         if (token) {
           // Fetch issues
           try {
-            const issuesRes = await fetch(`${API_BASE_URL}/api/issues/my`, {
-              headers: { 
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-              },
-              credentials: 'include',
-            });
+            const issuesRes = await api.get('/issues/my');
             
-            if (issuesRes.ok) {
-              const issuesJson = await issuesRes.json();
-              if (issuesJson.success && Array.isArray(issuesJson.data)) {
-                setIssues(issuesJson.data);
-              }
+            const issuesJson = issuesRes.data;
+            if (issuesJson.success && Array.isArray(issuesJson.data)) {
+              setIssues(issuesJson.data);
             }
           } catch (err) {
             console.error("❌ Failed to fetch issues:", err);
@@ -417,19 +349,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
           // Fetch reposts
           try {
-            const repostsRes = await fetch(`${API_BASE_URL}/api/issues/reposts/me`, {
-              headers: { 
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-              },
-              credentials: 'include',
-            });
+            const repostsRes = await api.get('/issues/reposts/me');
             
-            if (repostsRes.ok) {
-              const repostsJson = await repostsRes.json();
-              if (repostsJson.success && Array.isArray(repostsJson.data)) {
-                setReposts(repostsJson.data);
-              }
+            const repostsJson = repostsRes.data;
+            if (repostsJson.success && Array.isArray(repostsJson.data)) {
+              setReposts(repostsJson.data);
             }
           } catch (err) {
             console.error("❌ Failed to fetch reposts:", err);

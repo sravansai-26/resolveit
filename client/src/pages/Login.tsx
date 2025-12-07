@@ -8,9 +8,7 @@ import { useAuth } from "../context/AuthContext";
 
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
-
-// ✅ USE THE ENVIRONMENT VARIABLE YOU SET (.env → VITE_API_URL)
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../lib/api";
 
 export function Login() {
     const [formData, setFormData] = useState({
@@ -67,18 +65,9 @@ export function Login() {
 
             setFeedback("Verifying Google token...");
 
-            const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idToken }),
-            });
+            const response = await api.post('/auth/google', { idToken });
 
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.message || "Google verification failed");
-            }
-
-            const data = await response.json();
+            const data = response.data;
             const { token, user } = data.data;
 
             login(token, user, true); // Always remember Google sign-in
@@ -93,6 +82,7 @@ export function Login() {
 
             if (error?.code === "auth/popup-closed-by-user") msg = "Popup closed.";
             if (error?.code === "auth/network-request-failed") msg = "Network error.";
+            if (error?.response?.data?.message) msg = error.response.data.message;
 
             setFeedback(msg);
             setIsError(true);
@@ -111,22 +101,12 @@ export function Login() {
         setIsError(false);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password,
-                }),
+            const response = await api.post('/auth/login', {
+                email: formData.email,
+                password: formData.password,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                setIsError(true);
-                setFeedback(data.message || "Invalid credentials");
-                return;
-            }
+            const data = response.data;
 
             const { token, user } = data.data;
 
@@ -139,7 +119,8 @@ export function Login() {
 
         } catch (err: any) {
             setIsError(true);
-            setFeedback("Network error. Try again.");
+            const msg = err.response?.data?.message || "Network error. Try again.";
+            setFeedback(msg);
         } finally {
             setLoading(false);
         }
