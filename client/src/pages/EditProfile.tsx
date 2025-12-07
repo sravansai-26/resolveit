@@ -14,9 +14,8 @@ import {
 import { useProfile } from "../context/ProfileContext";
 
 // ======================================================================
-// API URL
+// Media URL helper uses VITE_API_URL
 // ======================================================================
-const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 /**
  * FIXED getMediaUrl — handles:
@@ -35,11 +34,11 @@ const getMediaUrl = (path: string): string => {
 
   // Case 2: backend returns "/uploads/profile.jpg"
   if (path.startsWith("/")) {
-    return `${API_BASE_URL}${path}`;
+    return `${import.meta.env.VITE_API_URL}${path}`;
   }
 
   // Case 3: backend returns "uploads/profile.jpg"
-  return `${API_BASE_URL}/${path}`;
+  return `${import.meta.env.VITE_API_URL}/${path}`;
 };
 
 export function EditProfile() {

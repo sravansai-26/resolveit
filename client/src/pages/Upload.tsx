@@ -3,11 +3,11 @@
 import { useState, useRef } from "react";
 import { Upload as UploadIcon, MapPin } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "../lib/api";
 
 // ======================================================================
 // ✅ ARCHITECTURE FIX: Using VITE_API_URL (Option B) for all calls.
-// ======================================================================
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+// =====================================================================
 const MAX_FILE_SIZE_BYTES = 300 * 1024 * 1024; // 300MB, as per your server config
 
 const categories = [
@@ -145,22 +145,14 @@ export function Upload() {
         throw new Error("Authentication token missing. Please log in.");
       }
 
-      // 🟢 CRITICAL FIX: Use API_BASE_URL for the API call
-      const response = await fetch(`${API_BASE_URL}/api/issues/`, {
-        method: "POST",
+      const resp = await api.post('/issues', formPayload, {
         headers: {
-          Authorization: `Bearer ${token}`,
-          // ❌ DO NOT set Content-Type for FormData
+          // Let axios set multipart boundary
         },
-        body: formPayload,
       });
 
-      if (!response.ok) {
-        // Try to read JSON error body, handle unexpected end of JSON
-        const errorData = await response.json().catch(() => ({ 
-            message: `Server error: Status ${response.status}. Non-JSON response.`
-        }));
-        throw new Error(errorData.message || "Failed to create issue.");
+      if (!resp?.data?.success) {
+        throw new Error(resp?.data?.message || "Failed to create issue.");
       }
 
       // Success

@@ -16,8 +16,7 @@ import {
   User as FirebaseUser,
 } from "firebase/auth";
 import { auth } from "../firebase";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../lib/api";
 
 interface AuthContextType {
   user: ProfileUser | null;
@@ -117,12 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Inform backend (optional)
     try {
       console.log("🔵 Notifying backend of logout...");
-      await fetch(`${API_BASE_URL}/api/auth/logout`, { 
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        }
-      });
+      await api.post("/auth/logout");
       console.log("✅ Backend logout notification sent");
     } catch (e) {
       console.warn("⚠️ Backend logout notification failed (non-critical)");
@@ -145,24 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("✅ Firebase ID token obtained (length:", idToken.length, ")");
 
       console.log("🔵 Sending token to backend for verification...");
-      const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-        credentials: 'include',
-      });
-
-      console.log("🔵 Backend response status:", res.status);
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("❌ Google backend sync failed");
-        console.error("❌ Status:", res.status);
-        console.error("❌ Response:", text);
-        throw new Error("Google sync failed");
-      }
-
-      const json = await res.json();
+      const resp = await api.post("/auth/google", { idToken });
+      const json = resp.data;
+      console.log("🔵 Backend response status: (via axios)", resp.status);
       console.log("✅ Backend response received");
       console.log("🔵 Response data:", json);
 
@@ -213,46 +192,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("🔵 Calling GET /api/users/me");
         console.log("🔵 Token preview:", token.substring(0, 20) + "...");
 
-        const res = await fetch(`${API_BASE_URL}/api/users/me`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          credentials: 'include', // IMPORTANT for cross-origin auth
-        });
-
-        console.log("🔵 Profile fetch response status:", res.status);
-        console.log("🔵 Response headers:", {
-          contentType: res.headers.get('content-type'),
-          hasBody: res.headers.get('content-length')
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("❌ Profile fetch failed");
-          console.error("❌ Status:", res.status);
-          console.error("❌ Response:", text);
-          
-          // Only clear auth data on 4xx errors (client errors)
-          // Don't clear on 5xx errors (server issues) - might be temporary
-          if (res.status >= 400 && res.status < 500) {
-            console.warn("⚠️ Client error - clearing auth data");
-            clearAuthData();
-          } else {
-            console.warn("⚠️ Server error - keeping auth data");
-          }
-          
-          setLoading(false);
-          return;
-        }
-
-        const json = await res.json();
-        console.log("✅ Profile fetch response received");
+        const resp = await api.get("/users/me");
+        const json = resp.data;
+        console.log("✅ Profile fetch response received (via axios)");
         console.log("🔵 Response structure:", {
           success: json.success,
           hasUser: !!json.user,
-          userEmail: json.user?.email
+          userEmail: json.user?.email,
         });
 
         if (json.success && json.user) {

@@ -8,9 +8,7 @@ import { useAuth } from "../context/AuthContext";
 
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
-
-// ✅ USE THE ENVIRONMENT VARIABLE YOU SET (.env → VITE_API_URL)
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from "../lib/api";
 
 export function Login() {
     const [formData, setFormData] = useState({
@@ -67,18 +65,8 @@ export function Login() {
 
             setFeedback("Verifying Google token...");
 
-            const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idToken }),
-            });
-
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.message || "Google verification failed");
-            }
-
-            const data = await response.json();
+            const resp = await api.post('/auth/google', { idToken });
+            const data = resp.data;
             const { token, user } = data.data;
 
             login(token, user, true); // Always remember Google sign-in
@@ -111,20 +99,16 @@ export function Login() {
         setIsError(false);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password,
-                }),
+            const resp = await api.post('/auth/login', {
+                email: formData.email,
+                password: formData.password,
             });
 
-            const data = await response.json();
+            const data = resp.data;
 
-            if (!response.ok) {
+            if (!data || !data.success) {
                 setIsError(true);
-                setFeedback(data.message || "Invalid credentials");
+                setFeedback(data?.message || "Invalid credentials");
                 return;
             }
 

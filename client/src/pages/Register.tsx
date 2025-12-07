@@ -8,8 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import api from '../lib/api';
 
 export function Register() {
     const [formData, setFormData] = useState({
@@ -60,18 +59,8 @@ export function Register() {
 
             setFeedback("Verifying Google token...");
 
-            const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idToken }),
-            });
-
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.message || "Google verification failed.");
-            }
-
-            const data = await response.json();
+            const resp = await api.post('/auth/google', { idToken });
+            const data = resp.data;
             const { token, user } = data.data;
 
             login(token, user, true);
@@ -116,27 +105,23 @@ export function Register() {
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    firstName: formData.firstName,
-                    lastName: formData.lastName,
-                    email: formData.email,
-                    password: formData.password,
-                    phone: formData.phone,
-                    address: formData.address,
-                }),
+            const resp = await api.post('/auth/register', {
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                email: formData.email,
+                password: formData.password,
+                phone: formData.phone,
+                address: formData.address,
             });
 
-            const data = await response.json();
+            const data = resp.data;
 
-            if (!response.ok) {
+            if (!data || !data.success) {
                 setIsError(true);
                 setFeedback(
-                    data.errors
+                    data?.errors
                         ? data.errors.map((err: any) => err.msg).join("; ")
-                        : data.message || "Registration failed."
+                        : data?.message || "Registration failed."
                 );
                 return;
             }

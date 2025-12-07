@@ -5,7 +5,6 @@ import { Settings, MapPin, Mail, Phone, Edit, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useProfile } from "../context/ProfileContext";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 /**
  * Helper function to construct the full URL for media files stored on the backend.
@@ -16,7 +15,7 @@ const getMediaUrl = (path: string): string => {
     if (!path) return "";
     if (path.startsWith("http") || path.startsWith("blob:")) return path;
 
-    return `${API_BASE_URL}/${path.replace(/^\/+/, "")}`;
+    return `${import.meta.env.VITE_API_URL}/${path.replace(/^\/+/, "")}`;
 };
 
 export function Profile() {
