@@ -1,4 +1,4 @@
-// src/context/AuthContext.tsx - COMPLETE FIXED VERSION WITH DEBUG LOGS
+// src/context/AuthContext.tsx - COMPLETE FIXED VERSION (CORRECT ENDPOINT)
 
 import React, {
   createContext,
@@ -182,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ================================================================
   // FETCH LOGGED-IN USER PROFILE (AFTER REFRESH)
+  // ✅ FIXED: Using /api/users/me instead of /api/auth/me
   // ================================================================
   const fetchUserProfile = useCallback(
     async () => {
@@ -199,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("✅ Token found, fetching profile...");
 
       try {
+        // ✅ CRITICAL FIX: Changed from /api/auth/me to /api/users/me
         console.log("🔵 Calling GET /api/users/me");
 
         const res = await fetch(`${API_BASE_URL}/api/users/me`, {
