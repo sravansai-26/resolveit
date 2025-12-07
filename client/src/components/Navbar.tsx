@@ -1,8 +1,9 @@
 // src/components/Navbar.tsx
-import { Link, useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
-import { Logo } from './Logo';
-import { useAuth } from '../context/AuthContext';
+import { Link, useNavigate } from "react-router-dom";
+import { Menu, Upload, LogOut } from "lucide-react";
+import { Logo } from "./Logo";
+import { useAuth } from "../context/AuthContext";
+import { useProfile } from "../context/ProfileContext";
 
 interface NavbarProps {
   toggleSidebar: () => void;
@@ -10,14 +11,23 @@ interface NavbarProps {
 
 export function Navbar({ toggleSidebar }: NavbarProps) {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, loading } = useAuth(); // ✅ include loading
+  const { isAuthenticated, logout, loading } = useAuth();
+  const { user } = useProfile();
 
   const handleLogout = async () => {
-    await logout(); // ✅ Wait for full cleanup
-    navigate('/login', { replace: true }); // Prevent back-navigation to protected pages
+    await logout();
+    navigate("/login", { replace: true });
   };
 
-  // 🟢 Prevent UI flicker while AuthContext is validating stored token
+  // Default avatar if user has no profile picture
+  const defaultAvatar =
+    "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200";
+
+  const avatar = user?.avatar
+    ? `${import.meta.env.VITE_API_URL}/${user.avatar.replace(/^\/+/, "")}`
+    : defaultAvatar;
+
+  // Loading state prevents UI flicker
   if (loading) {
     return (
       <nav className="bg-white shadow-md fixed top-0 left-0 right-0 z-30">
@@ -36,6 +46,8 @@ export function Navbar({ toggleSidebar }: NavbarProps) {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
+
+          {/* Left Section */}
           <div className="flex items-center">
             <button
               onClick={toggleSidebar}
@@ -51,14 +63,15 @@ export function Navbar({ toggleSidebar }: NavbarProps) {
             </Link>
           </div>
 
+          {/* Right Section */}
           <div className="flex items-center space-x-4">
+
             {!isAuthenticated ? (
               <>
                 {/* PUBLIC BUTTONS */}
                 <Link
                   to="/login"
                   className="px-4 py-2 text-blue-600 hover:text-blue-800 font-medium"
-                  title="Login"
                 >
                   Login
                 </Link>
@@ -66,36 +79,45 @@ export function Navbar({ toggleSidebar }: NavbarProps) {
                 <Link
                   to="/register"
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                  title="Register"
                 >
                   Register
                 </Link>
               </>
             ) : (
               <>
-                {/* AUTHENTICATED BUTTONS */}
+                {/* =========================
+                   LOGGED-IN ACTION BUTTONS
+                   ========================= */}
+
+                {/* UPLOAD (icon) */}
                 <Link
                   to="/upload"
-                  className="text-gray-700 hover:text-blue-600 font-medium"
+                  className="p-2 rounded-full hover:bg-blue-100 transition"
                   title="Upload Issue"
                 >
-                  Upload
+                  <Upload size={22} className="text-gray-700" />
                 </Link>
 
+                {/* PROFILE (user avatar) */}
                 <Link
                   to="/profile"
-                  className="text-gray-700 hover:text-blue-600 font-medium"
                   title="Profile"
+                  className="flex items-center"
                 >
-                  Profile
+                  <img
+                    src={avatar}
+                    alt="User avatar"
+                    className="w-9 h-9 rounded-full object-cover border-2 border-transparent hover:border-blue-500 transition"
+                  />
                 </Link>
 
+                {/* LOGOUT (icon) */}
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium"
+                  className="p-2 rounded-full hover:bg-red-100 transition"
                   title="Logout"
                 >
-                  Logout
+                  <LogOut size={22} className="text-red-600" />
                 </button>
               </>
             )}
