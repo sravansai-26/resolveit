@@ -1,4 +1,4 @@
-// src/pages/Home.tsx
+// src/pages/Home.tsx - FINAL FIXED VERSION
 import React, { useState, useEffect, useCallback } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import { Link } from "react-router-dom";
@@ -14,14 +14,8 @@ import {
 import "/src/home.css";
 import { useAuth } from "../context/AuthContext";
 
-// ======================================================================
-// CONFIG: API base URL
-// ======================================================================
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-// ======================================================================
-// Categories
-// ======================================================================
 const categories: string[] = [
     "Road Infrastructure",
     "Sanitation",
@@ -31,7 +25,6 @@ const categories: string[] = [
     "Other",
 ];
 
-// ==================== Type Definitions ====================
 interface User {
     _id: string;
     firstName: string;
@@ -71,21 +64,13 @@ interface Issue {
 
 type VoteStatus = "upvote" | "downvote" | null;
 
-// ======================================================================
-// MEDIA URL HELPER — FIXED DOUBLE SLASH BUG
-// ======================================================================
 const getMediaUrl = (path: string): string => {
     if (!path) return "";
     if (path.startsWith("http")) return path;
-
-    // remove leading slashes to avoid //uploads/image.jpg
     const normalizedPath = path.replace(/^\/+/, "");
     return `${API_BASE_URL}/${normalizedPath}`;
 };
 
-// ======================================================================
-// HOME COMPONENT
-// ======================================================================
 export function Home() {
     const { user, isAuthenticated, loading } = useAuth();
 
@@ -101,7 +86,7 @@ export function Home() {
         localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 
     // ======================================================================
-    // FETCH ISSUES — FIXED: PUBLIC ACCESS + CLEAN VOTES RESET
+    // FETCH ISSUES - WORKS FOR BOTH LOGGED IN AND PUBLIC USERS
     // ======================================================================
     const fetchIssues = useCallback(
         async (pageNumber = 1, reset = false) => {
@@ -120,20 +105,26 @@ export function Home() {
                 if (filters.category) url.searchParams.append("category", filters.category);
                 if (filters.location) url.searchParams.append("location", filters.location);
 
+                console.log("🔵 Fetching issues:", url.toString());
+
                 const res = await fetch(url.toString(), { headers });
 
-                if (res.status === 401) {
-                    setIsLoading(false);
-                    return;
+                console.log("🔵 Issues response status:", res.status);
+
+                // Allow 401 for public access - just don't include user-specific data
+                if (!res.ok && res.status !== 401) {
+                    throw new Error(`HTTP ${res.status}`);
                 }
 
                 const json = await res.json();
 
-                if (!res.ok || !json.success || !Array.isArray(json.data)) {
+                if (!json.success || !Array.isArray(json.data)) {
                     throw new Error(json.message || "Failed to fetch issues");
                 }
 
                 const issuesData = json.data as Issue[];
+                console.log("✅ Issues loaded:", issuesData.length);
+
                 const initialVotes: Record<string, VoteStatus> = {};
                 const authUserId = user?._id ?? null;
 
@@ -165,7 +156,7 @@ export function Home() {
                     reset ? issuesWithFlags : [...prev, ...issuesWithFlags]
                 );
             } catch (err) {
-                console.error("Error loading issues:", err);
+                console.error("❌ Error loading issues:", err);
                 setHasMore(false);
             } finally {
                 setIsLoading(false);
@@ -175,21 +166,27 @@ export function Home() {
     );
 
     // ======================================================================
-    // INITIAL LOAD WHEN AUTH CHECK COMPLETES
+    // INITIAL LOAD - WAIT FOR AUTH CHECK TO COMPLETE
     // ======================================================================
     useEffect(() => {
-        if (loading) return;
+        if (loading) {
+            console.log("⏳ Waiting for auth check to complete...");
+            return;
+        }
 
+        console.log("✅ Auth check complete, loading issues");
         setPage(1);
         setHasMore(true);
         fetchIssues(1, true);
-    }, [loading, isAuthenticated, fetchIssues]);
+    }, [loading, fetchIssues]);
 
     // ======================================================================
-    // REFRESH ON FILTER CHANGE — FIXED: RESET userVotes + commentTexts
+    // REFRESH ON FILTER CHANGE
     // ======================================================================
     useEffect(() => {
         if (loading) return;
+        
+        console.log("🔵 Filters changed, reloading issues");
         setPage(1);
         setIssues([]);
         setUserVotes({});
@@ -201,10 +198,16 @@ export function Home() {
     // VOTE HANDLER
     // ======================================================================
     const handleVote = async (issueId: string, isUpvote: boolean) => {
-        if (!isAuthenticated) return alert("Please log in to vote.");
+        if (!isAuthenticated) {
+            alert("Please log in to vote.");
+            return;
+        }
 
         const token = getAuthToken();
-        if (!token) return alert("Session expired. Please log in again.");
+        if (!token) {
+            alert("Session expired. Please log in again.");
+            return;
+        }
 
         const currentVote = userVotes[issueId];
         const newVote: VoteStatus = isUpvote ? "upvote" : "downvote";
@@ -253,13 +256,19 @@ export function Home() {
     };
 
     // ======================================================================
-    // FIXED: REPOST LOGIC (NO MORE WRONG TOGGLE)
+    // REPOST HANDLER
     // ======================================================================
     const handleRepost = async (issue: Issue) => {
-        if (!isAuthenticated) return alert("Please log in to repost.");
+        if (!isAuthenticated) {
+            alert("Please log in to repost.");
+            return;
+        }
 
         const token = getAuthToken();
-        if (!token) return alert("Session expired. Please log in again.");
+        if (!token) {
+            alert("Session expired. Please log in again.");
+            return;
+        }
 
         try {
             const res = await fetch(`${API_BASE_URL}/api/issues/${issue._id}/repost`, {
@@ -280,7 +289,7 @@ export function Home() {
                         ? {
                               ...i,
                               repostCount: json.data.repostCount,
-                              repostedByUser: json.data.repostedByUser, // FIXED
+                              repostedByUser: json.data.repostedByUser,
                           }
                         : i
                 )
@@ -292,16 +301,22 @@ export function Home() {
     };
 
     // ======================================================================
-    // COMMENT SECTION HANDLERS
+    // COMMENT HANDLERS
     // ======================================================================
     const handleSubmitComment = async (issueId: string) => {
-        if (!isAuthenticated) return alert("Please log in to comment.");
+        if (!isAuthenticated) {
+            alert("Please log in to comment.");
+            return;
+        }
 
         const text = commentTexts[issueId]?.trim();
         if (!text) return;
 
         const token = getAuthToken();
-        if (!token) return alert("Session expired. Please log in again.");
+        if (!token) {
+            alert("Session expired. Please log in again.");
+            return;
+        }
 
         try {
             const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/comment`, {
@@ -355,34 +370,13 @@ export function Home() {
         });
 
     // ======================================================================
-    // AUTH STATES
+    // LOADING STATE - ONLY SHOW WHILE CHECKING AUTH
     // ======================================================================
     if (loading) {
         return (
             <div className="text-center py-10">
-                <h4 className="text-xl font-medium">Checking your session...</h4>
+                <h4 className="text-xl font-medium">Loading...</h4>
                 <div className="animate-spin inline-block h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mt-4"></div>
-            </div>
-        );
-    }
-
-    if (!isAuthenticated) {
-        return (
-            <div className="home-container">
-                <div className="text-center py-20 bg-white rounded-lg shadow-md mx-auto max-w-xl border border-gray-200">
-                    <h2 className="text-3xl font-extrabold text-blue-600 mb-4">
-                        Join the Conversation!
-                    </h2>
-                    <p className="text-gray-600 mb-8 px-4">
-                        Please log in or register to view community issues and participate in resolving local problems.
-                    </p>
-                    <Link
-                        to="/login"
-                        className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-lg"
-                    >
-                        Log In / Register
-                    </Link>
-                </div>
             </div>
         );
     }
@@ -435,41 +429,39 @@ export function Home() {
                     <span className="issue-category">{issue.category}</span>
 
                     <div className="issue-votes">
-                        {/* Upvote */}
                         <button
                             onClick={() => handleVote(issue._id, true)}
                             className={`vote-button upvote ${userVote === "upvote" ? "active" : ""}`}
+                            disabled={!isAuthenticated}
                         >
                             <ThumbsUp size={20} /> <span>{issue.upvotes}</span>
                         </button>
 
-                        {/* Downvote */}
                         <button
                             onClick={() => handleVote(issue._id, false)}
                             className={`vote-button downvote ${userVote === "downvote" ? "active" : ""}`}
+                            disabled={!isAuthenticated}
                         >
                             <ThumbsDown size={20} /> <span>{issue.downvotes}</span>
                         </button>
 
-                        {/* Repost */}
                         <button
                             onClick={() => handleRepost(issue)}
                             className={`vote-button repost ${issue.repostedByUser ? "active" : ""}`}
+                            disabled={!isAuthenticated}
                         >
                             <Repeat2 size={20} />
                             <span>{issue.repostCount || 0}</span>
                         </button>
 
-                        {/* Share */}
-                      <button
-    onClick={() => handleShare(issue._id)}
-    className="vote-button share"
-    aria-label="Share this issue"
-    title="Share this issue"
->
-    <Share2 size={20} />
-</button>
-
+                        <button
+                            onClick={() => handleShare(issue._id)}
+                            className="vote-button share"
+                            aria-label="Share this issue"
+                            title="Share this issue"
+                        >
+                            <Share2 size={20} />
+                        </button>
 
                         <div className="comment-count">
                             <MessageCircle size={18} /> {issue.comments?.length || 0}
@@ -478,7 +470,6 @@ export function Home() {
 
                     <p className="issue-description">{issue.description}</p>
 
-                    {/* Progress Bar */}
                     <div
                         className="progress-bar-container"
                         style={
@@ -498,7 +489,7 @@ export function Home() {
                         </div>
                     )}
 
-                    {/* Comments */}
+                    {/* Comments Section */}
                     <div className="comment-section">
                         <h3 className="comments-title">
                             Comments ({issue.comments?.length || 0})
@@ -527,24 +518,32 @@ export function Home() {
                             <p className="no-comments">No comments yet. Be the first!</p>
                         )}
 
-                        <div className="comment-input-area">
-                            <textarea
-                                value={commentTexts[issue._id] || ""}
-                                onChange={(e) =>
-                                    handleCommentChange(issue._id, e.target.value)
-                                }
-                                placeholder="Add a comment..."
-                                rows={2}
-                                disabled={!isAuthenticated}
-                            />
+                        {!isAuthenticated ? (
+                            <div className="text-center py-3 text-gray-600">
+                                <Link to="/login" className="text-blue-600 hover:underline">
+                                    Log in
+                                </Link>{" "}
+                                to comment
+                            </div>
+                        ) : (
+                            <div className="comment-input-area">
+                                <textarea
+                                    value={commentTexts[issue._id] || ""}
+                                    onChange={(e) =>
+                                        handleCommentChange(issue._id, e.target.value)
+                                    }
+                                    placeholder="Add a comment..."
+                                    rows={2}
+                                />
 
-                            <button
-                                onClick={() => handleSubmitComment(issue._id)}
-                                disabled={!commentTexts[issue._id]?.trim()}
-                            >
-                                Submit
-                            </button>
-                        </div>
+                                <button
+                                    onClick={() => handleSubmitComment(issue._id)}
+                                    disabled={!commentTexts[issue._id]?.trim()}
+                                >
+                                    Submit
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -552,11 +551,22 @@ export function Home() {
     };
 
     // ======================================================================
-    // PAGE RENDER
+    // MAIN RENDER
     // ======================================================================
     return (
         <div className="home-container">
             <h1 className="home-title">Community Issues</h1>
+
+            {!isAuthenticated && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-center">
+                    <p className="text-blue-800">
+                        <Link to="/login" className="font-semibold hover:underline">
+                            Log in
+                        </Link>{" "}
+                        to vote, comment, and report issues
+                    </p>
+                </div>
+            )}
 
             {isLoading && issues.length === 0 && (
                 <div className="text-center py-4 text-gray-600">
@@ -566,14 +576,13 @@ export function Home() {
 
             <div className="filter-controls">
                 <select
-                 id="filter-category"
-    aria-label="Filter by category"
+                    id="filter-category"
+                    aria-label="Filter by category"
                     value={filters.category}
                     onChange={(e) =>
                         setFilters({ ...filters, category: e.target.value })
                     }
                     className="filter-select"
-                    disabled={issues.length === 0}
                 >
                     <option value="">All Categories</option>
                     {categories.map((cat: string) => (
@@ -591,7 +600,6 @@ export function Home() {
                         setFilters({ ...filters, location: e.target.value })
                     }
                     className="filter-input"
-                    disabled={issues.length === 0}
                 />
             </div>
 
