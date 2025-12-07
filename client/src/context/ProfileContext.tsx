@@ -1,4 +1,4 @@
-// src/context/ProfileContext.tsx - COMPLETE FIXED VERSION WITH DEBUG LOGS
+// src/context/ProfileContext.tsx - COMPLETE FIXED VERSION
 
 import React, {
   createContext,
@@ -76,9 +76,16 @@ const getToken = () => {
   const localToken = localStorage.getItem("token");
   const sessionToken = sessionStorage.getItem("token");
   
-  if (localToken) return localToken;
-  if (sessionToken) return sessionToken;
+  if (localToken) {
+    console.log("🔵 ProfileContext: Token found in localStorage");
+    return localToken;
+  }
+  if (sessionToken) {
+    console.log("🔵 ProfileContext: Token found in sessionStorage");
+    return sessionToken;
+  }
   
+  console.warn("⚠️ ProfileContext: No token found");
   return null;
 };
 
@@ -127,18 +134,29 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       console.log("🔵 Calling GET /api/issues/my");
 
       const res = await fetch(`${API_BASE_URL}/api/issues/my`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        credentials: 'include', // IMPORTANT for cross-origin auth
       });
 
       console.log("🔵 Issues response status:", res.status);
 
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Issues fetch failed:", errorText);
+        setIssues([]);
+        return;
+      }
+
       const json = await res.json();
 
-      if (res.ok && Array.isArray(json.data)) {
+      if (json.success && Array.isArray(json.data)) {
         console.log("✅ Issues loaded:", json.data.length);
         setIssues(json.data);
       } else {
-        console.warn("⚠️ Invalid issues response");
+        console.warn("⚠️ Invalid issues response structure");
         setIssues([]);
       }
     } catch (err) {
@@ -162,18 +180,29 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       console.log("🔵 Calling GET /api/issues/reposts/me");
 
       const res = await fetch(`${API_BASE_URL}/api/issues/reposts/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        credentials: 'include',
       });
 
       console.log("🔵 Reposts response status:", res.status);
 
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Reposts fetch failed:", errorText);
+        setReposts([]);
+        return;
+      }
+
       const json = await res.json();
 
-      if (res.ok && Array.isArray(json.data)) {
+      if (json.success && Array.isArray(json.data)) {
         console.log("✅ Reposts loaded:", json.data.length);
         setReposts(json.data);
       } else {
-        console.warn("⚠️ Invalid reposts response");
+        console.warn("⚠️ Invalid reposts response structure");
         setReposts([]);
       }
     } catch (err) {
@@ -216,14 +245,22 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         const res = await fetch(`${API_BASE_URL}/api/users/me`, {
           method: "PUT",
           headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
           body: form,
         });
 
         console.log("🔵 Update response status:", res.status);
 
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("❌ Update failed:", errorText);
+          alert("Failed to update profile.");
+          return;
+        }
+
         const json = await res.json();
 
-        if (res.ok && json.success) {
+        if (json.success) {
           console.log("✅ Profile updated successfully");
           await fetchUserProfile(); // Refresh authenticated user
           alert("Profile updated successfully!");
@@ -255,13 +292,24 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       const res = await fetch(`${API_BASE_URL}/api/issues/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        credentials: 'include',
       });
 
       console.log("🔵 Delete response status:", res.status);
 
-      const json = await res.json();
       if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Delete failed:", errorText);
+        throw new Error("Failed to delete issue.");
+      }
+
+      const json = await res.json();
+      
+      if (!json.success) {
         console.error("❌ Delete failed:", json.message);
         throw new Error(json.message || "Failed to delete issue.");
       }
@@ -295,13 +343,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
+          credentials: 'include',
           body: JSON.stringify({}),
         });
 
         console.log("🔵 Repost response status:", res.status);
 
-        const json = await res.json();
         if (!res.ok) {
+          const errorText = await res.text();
+          console.error("❌ Repost toggle failed:", errorText);
+          throw new Error("Failed to toggle repost");
+        }
+
+        const json = await res.json();
+        
+        if (!json.success) {
           console.error("❌ Repost toggle failed:", json.message);
           throw new Error(json.message);
         }
@@ -317,26 +373,79 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   );
 
   // ==================== INITIAL LOAD ====================
+  // CRITICAL FIX: Remove fetchProfile, fetchIssues, fetchReposts from dependencies
+  // They're useCallback functions that can trigger infinite loops
   useEffect(() => {
     const init = async () => {
       console.log("🔵 ProfileContext: Initializing...");
       console.log("🔵 Is authenticated:", isAuthenticated);
 
-      if (isAuthenticated) {
-        console.log("🔵 Loading profile data...");
-        await fetchProfile();
-        await fetchIssues();
-        await fetchReposts();
-        console.log("✅ Profile data loaded");
-      } else {
+      if (!isAuthenticated) {
         console.log("⚠️ Not authenticated, skipping data load");
+        setLoading(false);
+        return;
       }
 
-      setLoading(false);
+      console.log("🔵 Loading profile data...");
+      
+      // Call functions directly instead of relying on dependencies
+      try {
+        await fetchUserProfile(); // Fetch from AuthContext
+        
+        // Fetch issues and reposts
+        const token = getToken();
+        if (token) {
+          // Fetch issues
+          try {
+            const issuesRes = await fetch(`${API_BASE_URL}/api/issues/my`, {
+              headers: { 
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              credentials: 'include',
+            });
+            
+            if (issuesRes.ok) {
+              const issuesJson = await issuesRes.json();
+              if (issuesJson.success && Array.isArray(issuesJson.data)) {
+                setIssues(issuesJson.data);
+              }
+            }
+          } catch (err) {
+            console.error("❌ Failed to fetch issues:", err);
+          }
+
+          // Fetch reposts
+          try {
+            const repostsRes = await fetch(`${API_BASE_URL}/api/issues/reposts/me`, {
+              headers: { 
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              credentials: 'include',
+            });
+            
+            if (repostsRes.ok) {
+              const repostsJson = await repostsRes.json();
+              if (repostsJson.success && Array.isArray(repostsJson.data)) {
+                setReposts(repostsJson.data);
+              }
+            }
+          } catch (err) {
+            console.error("❌ Failed to fetch reposts:", err);
+          }
+        }
+
+        console.log("✅ Profile data loaded");
+      } catch (err) {
+        console.error("❌ Error loading profile data:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     init();
-  }, [isAuthenticated, fetchProfile, fetchIssues, fetchReposts]);
+  }, [isAuthenticated, fetchUserProfile]); // Only depend on isAuthenticated and fetchUserProfile
 
   // ==================== RETURN CONTEXT ====================
   return (

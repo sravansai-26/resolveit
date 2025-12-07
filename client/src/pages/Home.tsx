@@ -1,4 +1,4 @@
-// src/pages/Home.tsx - FINAL FIXED VERSION
+// src/pages/Home.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect, useCallback } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import { Link } from "react-router-dom";
@@ -72,28 +72,42 @@ const getMediaUrl = (path: string): string => {
 };
 
 export function Home() {
-    const { user, isAuthenticated, loading } = useAuth();
+    const { user, isAuthenticated, loading: authLoading } = useAuth();
 
     const [issues, setIssues] = useState<Issue[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [page, setPage] = useState(1);
     const [filters, setFilters] = useState({ category: "", location: "" });
     const [userVotes, setUserVotes] = useState<Record<string, VoteStatus>>({});
     const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
 
-    const getAuthToken = () =>
-        localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+    const getAuthToken = () => {
+        const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+        console.log("🔵 Getting auth token:", token ? "Found" : "Not found");
+        return token || "";
+    };
 
     // ======================================================================
     // FETCH ISSUES - WORKS FOR BOTH LOGGED IN AND PUBLIC USERS
     // ======================================================================
     const fetchIssues = useCallback(
         async (pageNumber = 1, reset = false) => {
+            console.log("🔵 Fetching issues - Page:", pageNumber, "Reset:", reset);
+            console.log("🔵 Auth state:", { isAuthenticated, userId: user?._id });
+
             const token = getAuthToken();
 
-            const headers: Record<string, string> = {};
-            if (token) headers["Authorization"] = `Bearer ${token}`;
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
+            
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+                console.log("✅ Token added to request");
+            } else {
+                console.log("🔵 No token - fetching public issues");
+            }
 
             setIsLoading(true);
 
@@ -105,39 +119,47 @@ export function Home() {
                 if (filters.category) url.searchParams.append("category", filters.category);
                 if (filters.location) url.searchParams.append("location", filters.location);
 
-                console.log("🔵 Fetching issues:", url.toString());
+                console.log("🔵 Fetching:", url.toString());
 
-                const res = await fetch(url.toString(), { headers });
+                const res = await fetch(url.toString(), { 
+                    headers,
+                    credentials: 'include' // IMPORTANT for cross-origin auth
+                });
 
                 console.log("🔵 Issues response status:", res.status);
 
-                // Allow 401 for public access - just don't include user-specific data
+                // For public access, 401 is acceptable
                 if (!res.ok && res.status !== 401) {
+                    const errorText = await res.text();
+                    console.error("❌ Issues fetch failed:", errorText);
                     throw new Error(`HTTP ${res.status}`);
                 }
 
                 const json = await res.json();
 
                 if (!json.success || !Array.isArray(json.data)) {
+                    console.error("❌ Invalid response structure:", json);
                     throw new Error(json.message || "Failed to fetch issues");
                 }
 
                 const issuesData = json.data as Issue[];
                 console.log("✅ Issues loaded:", issuesData.length);
 
+                // Process user votes if authenticated
                 const initialVotes: Record<string, VoteStatus> = {};
                 const authUserId = user?._id ?? null;
 
                 const issuesWithFlags = issuesData.map((issue) => {
+                    // Check if current user has voted
                     const userVote = issue.votes?.find(
                         (v) => authUserId && v.user === authUserId
                     );
 
-                    initialVotes[issue._id] = userVote
-                        ? userVote.isUpvote
-                            ? "upvote"
-                            : "downvote"
-                        : null;
+                    if (userVote) {
+                        initialVotes[issue._id] = userVote.isUpvote ? "upvote" : "downvote";
+                    } else {
+                        initialVotes[issue._id] = null;
+                    }
 
                     return {
                         ...issue,
@@ -149,12 +171,19 @@ export function Home() {
 
                 setUserVotes((prev) => (reset ? initialVotes : { ...prev, ...initialVotes }));
 
-                if (issuesWithFlags.length < 5) setHasMore(false);
-                else setHasMore(true);
+                // Check if there are more pages
+                if (issuesWithFlags.length < 5) {
+                    setHasMore(false);
+                    console.log("🔵 No more issues to load");
+                } else {
+                    setHasMore(true);
+                }
 
                 setIssues((prev) =>
                     reset ? issuesWithFlags : [...prev, ...issuesWithFlags]
                 );
+
+                console.log("✅ Issues state updated");
             } catch (err) {
                 console.error("❌ Error loading issues:", err);
                 setHasMore(false);
@@ -162,42 +191,52 @@ export function Home() {
                 setIsLoading(false);
             }
         },
-        [filters, user]
+        [filters, user, isAuthenticated]
     );
 
     // ======================================================================
     // INITIAL LOAD - WAIT FOR AUTH CHECK TO COMPLETE
     // ======================================================================
     useEffect(() => {
-        if (loading) {
+        console.log("🔵 Initial load effect - Auth loading:", authLoading);
+
+        if (authLoading) {
             console.log("⏳ Waiting for auth check to complete...");
             return;
         }
 
         console.log("✅ Auth check complete, loading issues");
+        console.log("🔵 User:", user?.email || "Not authenticated");
+        
         setPage(1);
         setHasMore(true);
         fetchIssues(1, true);
-    }, [loading, fetchIssues]);
+    }, [authLoading]); // Only depend on authLoading, not fetchIssues
 
     // ======================================================================
     // REFRESH ON FILTER CHANGE
     // ======================================================================
     useEffect(() => {
-        if (loading) return;
+        if (authLoading) {
+            console.log("⏳ Skipping filter effect - auth still loading");
+            return;
+        }
         
         console.log("🔵 Filters changed, reloading issues");
         setPage(1);
         setIssues([]);
         setUserVotes({});
         setCommentTexts({});
+        setHasMore(true);
         fetchIssues(1, true);
-    }, [filters, loading, fetchIssues]);
+    }, [filters.category, filters.location]); // Only depend on filter values
 
     // ======================================================================
     // VOTE HANDLER
     // ======================================================================
     const handleVote = async (issueId: string, isUpvote: boolean) => {
+        console.log("🔵 Vote handler called:", { issueId, isUpvote, isAuthenticated });
+
         if (!isAuthenticated) {
             alert("Please log in to vote.");
             return;
@@ -212,7 +251,9 @@ export function Home() {
         const currentVote = userVotes[issueId];
         const newVote: VoteStatus = isUpvote ? "upvote" : "downvote";
 
-        // Optimistic UI
+        console.log("🔵 Current vote:", currentVote, "New vote:", newVote);
+
+        // Optimistic UI update
         setIssues((prev) =>
             prev.map((issue) => {
                 if (issue._id !== issueId) return issue;
@@ -220,14 +261,17 @@ export function Home() {
                 let up = issue.upvotes;
                 let down = issue.downvotes;
 
+                // If clicking the same vote, remove it
                 if (currentVote === newVote) {
                     if (newVote === "upvote") up--;
                     else down--;
                     setUserVotes((prev) => ({ ...prev, [issueId]: null }));
                 } else {
+                    // Remove old vote if exists
                     if (currentVote === "upvote") up--;
                     if (currentVote === "downvote") down--;
 
+                    // Add new vote
                     if (newVote === "upvote") up++;
                     else down++;
 
@@ -239,18 +283,28 @@ export function Home() {
         );
 
         try {
+            console.log("🔵 Sending vote to server...");
             const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/vote`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
+                credentials: 'include',
                 body: JSON.stringify({ isUpvote }),
             });
 
-            if (!res.ok) throw new Error("Vote failed");
+            if (!res.ok) {
+                const error = await res.text();
+                console.error("❌ Vote failed:", error);
+                throw new Error("Vote failed");
+            }
+
+            console.log("✅ Vote successful");
         } catch (err) {
-            console.error("Vote failed:", err);
+            console.error("❌ Vote error:", err);
+            alert("Failed to register vote. Please try again.");
+            // Revert on failure
             fetchIssues(page, true);
         }
     };
@@ -259,6 +313,8 @@ export function Home() {
     // REPOST HANDLER
     // ======================================================================
     const handleRepost = async (issue: Issue) => {
+        console.log("🔵 Repost handler called:", { issueId: issue._id, isAuthenticated });
+
         if (!isAuthenticated) {
             alert("Please log in to repost.");
             return;
@@ -271,17 +327,25 @@ export function Home() {
         }
 
         try {
+            console.log("🔵 Sending repost to server...");
             const res = await fetch(`${API_BASE_URL}/api/issues/${issue._id}/repost`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
+                credentials: 'include',
                 body: JSON.stringify({}),
             });
 
             const json = await res.json();
-            if (!res.ok || !json.success) throw new Error(json.message);
+            
+            if (!res.ok || !json.success) {
+                console.error("❌ Repost failed:", json.message);
+                throw new Error(json.message);
+            }
+
+            console.log("✅ Repost successful");
 
             setIssues((prev) =>
                 prev.map((i) =>
@@ -295,8 +359,8 @@ export function Home() {
                 )
             );
         } catch (err) {
-            console.error("Repost error:", err);
-            alert("Error reposting/unreposting.");
+            console.error("❌ Repost error:", err);
+            alert("Error toggling repost. Please try again.");
         }
     };
 
@@ -304,13 +368,18 @@ export function Home() {
     // COMMENT HANDLERS
     // ======================================================================
     const handleSubmitComment = async (issueId: string) => {
+        console.log("🔵 Submit comment called:", { issueId, isAuthenticated });
+
         if (!isAuthenticated) {
             alert("Please log in to comment.");
             return;
         }
 
         const text = commentTexts[issueId]?.trim();
-        if (!text) return;
+        if (!text) {
+            console.warn("⚠️ Empty comment text");
+            return;
+        }
 
         const token = getAuthToken();
         if (!token) {
@@ -319,17 +388,25 @@ export function Home() {
         }
 
         try {
+            console.log("🔵 Sending comment to server...");
             const res = await fetch(`${API_BASE_URL}/api/issues/${issueId}/comment`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
+                credentials: 'include',
                 body: JSON.stringify({ text }),
             });
 
             const json = await res.json();
-            if (!res.ok || !json.success) throw new Error(json.message);
+            
+            if (!res.ok || !json.success) {
+                console.error("❌ Comment failed:", json.message);
+                throw new Error(json.message);
+            }
+
+            console.log("✅ Comment submitted successfully");
 
             setIssues((prev) =>
                 prev.map((issue) =>
@@ -341,8 +418,8 @@ export function Home() {
 
             setCommentTexts((prev) => ({ ...prev, [issueId]: "" }));
         } catch (err) {
-            console.error("Comment error:", err);
-            alert("Error submitting comment.");
+            console.error("❌ Comment error:", err);
+            alert("Error submitting comment. Please try again.");
         }
     };
 
@@ -355,9 +432,18 @@ export function Home() {
     // ======================================================================
     const handleShare = (issueId: string) => {
         const url = `${window.location.origin}/issues/${issueId}`;
-        navigator.clipboard?.writeText(url)
-            .then(() => alert("Link copied: " + url))
-            .catch(() => alert("Failed to copy link."));
+        
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(url)
+                .then(() => alert("Link copied to clipboard!"))
+                .catch(() => {
+                    // Fallback for browsers without clipboard API
+                    prompt("Copy this link:", url);
+                });
+        } else {
+            // Fallback for older browsers
+            prompt("Copy this link:", url);
+        }
     };
 
     const formatDateTime = (dateStr: string) =>
@@ -372,11 +458,12 @@ export function Home() {
     // ======================================================================
     // LOADING STATE - ONLY SHOW WHILE CHECKING AUTH
     // ======================================================================
-    if (loading) {
+    if (authLoading) {
         return (
             <div className="text-center py-10">
-                <h4 className="text-xl font-medium">Loading...</h4>
+                <h4 className="text-xl font-medium text-gray-700">Initializing...</h4>
                 <div className="animate-spin inline-block h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mt-4"></div>
+                <p className="text-gray-600 mt-2">Checking authentication status</p>
             </div>
         );
     }
@@ -433,6 +520,7 @@ export function Home() {
                             onClick={() => handleVote(issue._id, true)}
                             className={`vote-button upvote ${userVote === "upvote" ? "active" : ""}`}
                             disabled={!isAuthenticated}
+                            title={!isAuthenticated ? "Log in to vote" : "Upvote"}
                         >
                             <ThumbsUp size={20} /> <span>{issue.upvotes}</span>
                         </button>
@@ -441,6 +529,7 @@ export function Home() {
                             onClick={() => handleVote(issue._id, false)}
                             className={`vote-button downvote ${userVote === "downvote" ? "active" : ""}`}
                             disabled={!isAuthenticated}
+                            title={!isAuthenticated ? "Log in to vote" : "Downvote"}
                         >
                             <ThumbsDown size={20} /> <span>{issue.downvotes}</span>
                         </button>
@@ -449,6 +538,7 @@ export function Home() {
                             onClick={() => handleRepost(issue)}
                             className={`vote-button repost ${issue.repostedByUser ? "active" : ""}`}
                             disabled={!isAuthenticated}
+                            title={!isAuthenticated ? "Log in to repost" : "Repost"}
                         >
                             <Repeat2 size={20} />
                             <span>{issue.repostCount || 0}</span>
@@ -520,7 +610,7 @@ export function Home() {
 
                         {!isAuthenticated ? (
                             <div className="text-center py-3 text-gray-600">
-                                <Link to="/login" className="text-blue-600 hover:underline">
+                                <Link to="/login" className="text-blue-600 hover:underline font-medium">
                                     Log in
                                 </Link>{" "}
                                 to comment
@@ -560,17 +650,18 @@ export function Home() {
             {!isAuthenticated && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-center">
                     <p className="text-blue-800">
+                        Join the Conversation!
+                    </p>
+                    <p className="text-blue-700 mt-1">
                         <Link to="/login" className="font-semibold hover:underline">
                             Log in
                         </Link>{" "}
-                        to vote, comment, and report issues
+                        or{" "}
+                        <Link to="/register" className="font-semibold hover:underline">
+                            register
+                        </Link>{" "}
+                        to view community issues and participate in resolving local problems.
                     </p>
-                </div>
-            )}
-
-            {isLoading && issues.length === 0 && (
-                <div className="text-center py-4 text-gray-600">
-                    Loading community issues...
                 </div>
             )}
 
@@ -603,9 +694,16 @@ export function Home() {
                 />
             </div>
 
+            {isLoading && issues.length === 0 && (
+                <div className="text-center py-8 text-gray-600">
+                    <div className="animate-spin inline-block h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+                    <p className="mt-2">Loading community issues...</p>
+                </div>
+            )}
+
             {!isLoading && issues.length === 0 && (
                 <div className="text-center py-10 text-gray-500">
-                    <p>No issues found matching your criteria.</p>
+                    <p className="text-lg font-medium">No issues found</p>
                     <p className="text-sm mt-1">Try clearing filters or check back later!</p>
                 </div>
             )}
@@ -614,19 +712,25 @@ export function Home() {
                 dataLength={issues.length}
                 next={() => {
                     const nextPage = page + 1;
+                    console.log("🔵 Loading next page:", nextPage);
                     setPage(nextPage);
                     fetchIssues(nextPage);
                 }}
                 hasMore={hasMore}
                 loader={
                     issues.length > 0 ? (
-                        <h4 className="text-center py-4">Loading more issues...</h4>
+                        <div className="text-center py-4 text-gray-600">
+                            <div className="animate-spin inline-block h-6 w-6 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+                            <p className="mt-2">Loading more issues...</p>
+                        </div>
                     ) : null
                 }
                 endMessage={
-                    <p className="text-center py-4 text-gray-600">
-                        You&apos;ve reached the end of the issues feed.
-                    </p>
+                    issues.length > 0 ? (
+                        <p className="text-center py-4 text-gray-600">
+                            You&apos;ve reached the end of the issues feed.
+                        </p>
+                    ) : null
                 }
             >
                 {issues.map(renderIssueCard)}
