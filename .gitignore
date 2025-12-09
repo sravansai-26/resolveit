@@ -52,3 +52,7 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Ignore Service Account Keys
+server/config/serviceAccounKey.json
+server/config/serviceAccounKey.json.json
