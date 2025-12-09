@@ -30,7 +30,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 /* --------------------------------------------------------
     Serve uploads folder
 -------------------------------------------------------- */
-app.use('/uploads', express.static(join(__dirname, 'uploads')));
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*'); 
+    next();
+}, express.static(join(__dirname, 'uploads')));
 
 /* --------------------------------------------------------
     CRITICAL FIX: CORS Configuration (BEFORE other middleware)
