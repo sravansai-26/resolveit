@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "509516392972",
+    "project_id": "resolveit-project",
+    "storage_bucket": "resolveit-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:509516392972:android:b2bb592add504f1f8e9c29",
+        "android_client_info": {
+          "package_name": "com.lyfspot.resolveit"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "509516392972-cr87vd1nktn429rl2d96kcrjrrcd1fql.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAI_QgMbr_vfcMsovqzyJoGWR3fcAMy0LQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "509516392972-cr87vd1nktn429rl2d96kcrjrrcd1fql.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
