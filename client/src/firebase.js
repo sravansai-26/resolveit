@@ -5,13 +5,13 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
     // Reading public keys from Vercel Environment variables (VITE_ prefix required)
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+   apiKey: "AIzaSyCPKJ6LO2Mylk5d4CNqkXkKRQK7jnmoPs4",
+  authDomain: "resolveit-project.firebaseapp.com",
+  projectId: "resolveit-project",
+  storageBucket: "resolveit-project.firebasestorage.app",
+  messagingSenderId: "509516392972",
+  appId: "1:509516392972:web:441432180c7a915c8e9c29",
+  measurementId: "G-S91L1D13HD"
 };
 
 // Initialize Firebase
