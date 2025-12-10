@@ -48,6 +48,11 @@ export function Upload() {
     if (e.type === "dragenter" || e.type === "dragover") {
       setDragActive(true);
     } else if (e.type === "dragleave") {
+      // Check if relatedTarget is outside the drop zone to avoid flickering
+      // This is a common pattern for dragleave in nested elements
+      if (e.currentTarget.contains(e.relatedTarget as Node)) {
+          return;
+      }
       setDragActive(false);
     }
   };
@@ -59,8 +64,11 @@ export function Upload() {
     setDragActive(false);
     setError(null);
 
-    const files = Array.from(e.dataTransfer.files);
-    handleFileValidation(files);
+    // Use a safety check for files
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const files = Array.from(e.dataTransfer.files);
+        handleFileValidation(files);
+    }
   };
 
   // Handle media file input change
@@ -81,17 +89,20 @@ export function Upload() {
       if (isValid) {
         validFiles.push(file);
       } else {
-        invalidFiles.push(`${file.name} (${Math.round(file.size / 1024 / 1024)}MB)`);
+        // Round to 1 decimal place for file size
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1); 
+        invalidFiles.push(`${file.name} (${sizeMB}MB)`);
       }
     });
 
     if (invalidFiles.length > 0) {
-      setError(`Files exceeded 300MB limit: ${invalidFiles.join(', ')}`);
+      setError(`One or more files exceeded the ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB limit: ${invalidFiles.join(', ')}`);
     }
 
     if (validFiles.length > 0) {
       setFormData((prev) => ({
         ...prev,
+        // Prevent duplicate file names if possible (though the File object is unique)
         media: [...prev.media, ...validFiles],
       }));
     }
@@ -128,6 +139,13 @@ export function Upload() {
       return;
     }
 
+    const token = getToken();
+    if (!token) {
+      setError("Authentication token missing. Please log in.");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const formPayload = new FormData();
       formPayload.append("title", formData.title);
@@ -137,20 +155,22 @@ export function Upload() {
 
       // Append all media files
       formData.media.forEach((file) => {
-        formPayload.append("media", file);
+        // The server expects the field name 'media' to receive the files
+        formPayload.append("media", file); 
       });
 
-      const token = getToken();
-      if (!token) {
-        throw new Error("Authentication token missing. Please log in.");
-      }
-
+      // ✅ CRITICAL FIX: Add Authorization header for authenticated endpoint
       const resp = await api.post('/issues', formPayload, {
         headers: {
+          Authorization: `Bearer ${token}`,
           // Let axios set multipart boundary
         },
       });
 
+      if (resp.status !== 201 && resp.status !== 200) {
+          throw new Error(resp.data?.message || `API call failed with status ${resp.status}`);
+      }
+      
       if (!resp?.data?.success) {
         throw new Error(resp?.data?.message || "Failed to create issue.");
       }
@@ -162,7 +182,12 @@ export function Upload() {
 
     } catch (err) {
       console.error("Issue submission error:", err);
-      setError(err instanceof Error ? err.message : "Unexpected error occurred during submission.");
+      // More robust error message extraction
+      const errorMessage = err instanceof Error 
+          ? err.message 
+          : "Unexpected error occurred during submission.";
+          
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -274,7 +299,7 @@ export function Upload() {
 
         {/* Media Upload (Drag and Drop Area) */}
         <div
-          className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 rounded-md transition-colors ${
+          className={`mt-1 relative flex justify-center px-6 pt-5 pb-6 border-2 rounded-md transition-colors ${
             dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300"
           } border-dashed`}
           onDragEnter={handleDrag}
@@ -306,17 +331,16 @@ export function Upload() {
             </div>
             <p className="text-xs text-gray-500">Images and videos up to 300MB</p>
           </div>
-  {/* Invisible overlay for drop area activation */}
-  {dragActive && (
-    <div
-      className="absolute inset-0 z-10"
-      onDrop={handleDrop}
-      role="presentation"
-    />
-  )}
-</div>
+          {/* Invisible overlay for drop area activation (without redundant onDrop) */}
+          {dragActive && (
+            <div
+              className="absolute inset-0 z-10"
+              role="presentation"
+            />
+          )}
+        </div>
 
-{/* List selected files */}
+        {/* List selected files */}
         {formData.media.length > 0 && (
           <div className="mt-4 space-y-2">
             <p className="text-sm font-medium text-gray-700">Attached Media ({formData.media.length}):</p>
@@ -348,8 +372,8 @@ export function Upload() {
         >
           {isSubmitting ? (
             <div className="flex items-center space-x-2">
-                <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                <span>Submitting...</span>
+              <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+              <span>Submitting...</span>
             </div>
           ) : (
             "Submit Report"

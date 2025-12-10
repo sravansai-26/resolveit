@@ -28,8 +28,11 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 /* --------------------------------------------------------
-    Serve uploads folder
+    Serve uploads folder (CRITICAL FIX FOR IMAGE CORS)
 -------------------------------------------------------- */
+// This middleware ensures the Access-Control-Allow-Origin: * header
+// is sent with all static files from /uploads, allowing the mobile WebView
+// to load cross-origin images without the ERR_BLOCKED_BY_RESPONSE error.
 app.use('/uploads', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     next();
@@ -46,18 +49,18 @@ const ALLOWED_ORIGINS = [
     // === CRITICAL ADDITIONS FOR MOBILE/CAPACITOR ===
     "http://localhost",       // Generic localhost for Capacitor's WebView.
     "https://localhost",      // Secure localhost used by Capacitor on Android.
-    "http://10.0.2.2",        // Android Emulator's loopback IP address for accessing the host machine.
+    "http://10.0.2.2",        // Android Emulator's loopback IP address.
     "capacitor://localhost",  // Standard origin for Capacitor apps.
-    "http://192.168.x.x",     // Include a placeholder for physical device Wi-Fi testing
+    "http://192.168.x.x",     // Placeholder for physical device Wi-Fi testing
     // === CRITICAL ADDITION FOR FIREBASE REDIRECT ===
-    "https://resolveit-api.onrender.com" // Must allow your API domain for Firebase redirects (as the redirect URL).
+    "https://resolveit-api.onrender.com" // Must allow your API domain for Firebase redirects.
 ];
 
 const corsOptions = {
     origin: function (origin, callback) {
         console.log("🔵 CORS Check - Origin:", origin);
         
-        // Allow requests with no origin (mobile apps, Postman, etc.)
+        // Allow requests with no origin (mobile apps, Postman, file://, etc.)
         if (!origin) {
             console.log("✅ No origin - allowing request");
             return callback(null, true);
