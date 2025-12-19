@@ -5,10 +5,11 @@
     "concurrently": "^8.2.2"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^7.4.4",
     "typescript": "^5.9.3"
   },
-  "scripts": {             
+  "scripts": {
     "server": "npm run dev --prefix server",
     "client": "npm run dev --prefix client",
     "dev": "concurrently \"npm run client\" \"npm run server\""
