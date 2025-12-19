@@ -5,7 +5,6 @@ on:
     tags:
       - 'v*'
 
-      # ADD THIS SECTION HERE
 permissions:
   contents: write
 
@@ -26,7 +25,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21' # This fixes the 'invalid source release: 21' error
+          java-version: '21'
 
       - name: Build Frontend
         run: |
@@ -42,9 +41,16 @@ jobs:
           npx cap sync android
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4 # Updated to v4
+        uses: gradle/actions/setup-gradle@v4
         with:
           cache-overwrite-existing: true
+
+      # This step will print the SHA-1 you need for Google/Firebase
+      - name: Get SHA1 Key
+        run: |
+          cd android
+          chmod +x ./gradlew
+          ./gradlew signingReport
 
       - name: Build Debug APK
         run: |

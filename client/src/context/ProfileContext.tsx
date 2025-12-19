@@ -229,14 +229,13 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           // 1. Refresh AuthContext (updates authUser)
           await fetchUserProfile(); 
               
-          // 2. CRITICAL FIX: Directly update local user state for immediate UI refresh (Navbar)
-          // Assumes the API returns the updated user object at json.data.user
-          if (json.data && json.data.user) {
-              setUser(json.data.user as User);
-          } else {
-              // Fallback if API doesn't return user, rely on fetchUserProfile refresh
-              console.warn("⚠️ API response missing user object for immediate update.");
-          }
+         if (json.data && json.data.user) {
+      const updatedUser = {
+          ...json.data.user,
+          avatar: json.data.user.avatar ? `${json.data.user.avatar}?t=${Date.now()}` : undefined
+      };
+      setUser(updatedUser as User);
+  }
               
           alert("Profile updated successfully!");
         } else {

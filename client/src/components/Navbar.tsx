@@ -19,13 +19,12 @@ export function Navbar({ toggleSidebar }: NavbarProps) {
     navigate("/login", { replace: true });
   };
 
-  // Default avatar if user has no profile picture
-  const defaultAvatar =
-    "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200";
+  // 1. Updated avatar constant logic
+const defaultAvatar = "https://ui-avatars.com/api/?name=" + (user?.email || "User") + "&background=0D8ABC&color=fff";
 
-  const avatar = user?.avatar
-    ? `${import.meta.env.VITE_API_URL}/${user.avatar.replace(/^\/+/, "")}`
-    : defaultAvatar;
+const avatar = user?.avatar
+  ? `${import.meta.env.VITE_API_URL}/${user.avatar.replace(/^\/+/, "")}`
+  : defaultAvatar;
 
   // Loading state prevents UI flicker
   if (loading) {

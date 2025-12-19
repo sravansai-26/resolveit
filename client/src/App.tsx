@@ -14,6 +14,7 @@ import { Register } from './pages/Register';
 import { EditPost } from './pages/EditPost';
 import { TermsOfService } from './pages/TermsOfService';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
+import { ForgotPassword } from "./pages/ForgotPassword";
 
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
@@ -49,6 +50,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
 
               {/* ========= Protected Routes ========= */}
               <Route

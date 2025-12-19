@@ -1,5 +1,4 @@
-// src/context/AuthContext.tsx - COMPLETE FIXED VERSION
-
+// src/context/AuthContext.tsx
 import React, {
   createContext,
   useContext,
@@ -74,6 +73,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ================================================================
+  // HYDRATION: Immediate Load from Storage (Fixes APK State Loss)
+  // ================================================================
+  useEffect(() => {
+    console.log("🔋 HYDRATION: Checking for existing session...");
+    const savedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
+    const savedToken = localStorage.getItem("token") || sessionStorage.getItem("token");
+    
+    if (savedUser && savedToken) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        setIsAuthenticated(true);
+        console.log("✅ Hydration successful: User found");
+      } catch (e) {
+        console.error("❌ Hydration failed", e);
+      }
+    }
+  }, []);
+
+  // ================================================================
   // LOGIN — Manual + Google (Client-Side)
   // ================================================================
   const login = useCallback(
@@ -113,7 +132,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     clearAuthData();
 
-    // Inform backend (optional)
     try {
       console.log("🔵 Notifying backend of logout...");
       await api.post("/auth/logout");
@@ -131,28 +149,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncWithFirebase = useCallback(async (fbUser: FirebaseUser) => {
     console.log("🔵 SYNC WITH FIREBASE STARTED");
     console.log("📧 Firebase user email:", fbUser.email);
-    console.log("🆔 Firebase user UID:", fbUser.uid);
 
     try {
       console.log("🔵 Getting Firebase ID token...");
       const idToken = await fbUser.getIdToken(true);
-      console.log("✅ Firebase ID token obtained (length:", idToken.length, ")");
+      console.log("✅ Firebase ID token obtained");
 
       console.log("🔵 Sending token to backend for verification...");
       const resp = await api.post("/auth/google", { idToken });
       const json = resp.data;
-      console.log("🔵 Backend response status: (via axios)", resp.status);
-      console.log("✅ Backend response received");
-      console.log("🔵 Response data:", json);
 
       if (json.success && json.data?.token && json.data?.user) {
-        console.log("✅ Valid response structure");
-        console.log("👤 User data:", json.data.user);
-        
-        // Save and set auth state
+        console.log("✅ Valid response structure. User:", json.data.user.email);
         login(json.data.token, json.data.user, true);
-        
-        console.log("✅ Google authentication complete");
       } else {
         console.error("❌ Invalid response structure:", json);
         clearAuthData();
@@ -167,12 +176,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ================================================================
   // FETCH LOGGED-IN USER PROFILE (AFTER REFRESH)
-  // ✅ FIXED: Better error handling and token validation
   // ================================================================
   const fetchUserProfile = useCallback(
     async () => {
       console.log("🔵 FETCH USER PROFILE STARTED");
-
       const token = getToken();
 
       if (!token) {
@@ -182,53 +189,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log("✅ Token found, preparing to fetch profile...");
-
-      // CRITICAL FIX: Add small delay to ensure token is fully stored
-      // This fixes the timing issue after Google login
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Capacitor Fix: Delay ensure storage is ready
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       try {
         console.log("🔵 Calling GET /api/users/me");
-        console.log("🔵 Token preview:", token.substring(0, 20) + "...");
-
         const resp = await api.get("/users/me");
         const json = resp.data;
-        console.log("✅ Profile fetch response received (via axios)");
-        console.log("🔵 Response structure:", {
-          success: json.success,
-          hasUser: !!json.user,
-          userEmail: json.user?.email,
-        });
 
         if (json.success && json.user) {
           console.log("✅ Valid profile data received");
-          console.log("👤 User:", json.user.email);
-          console.log("🆔 User ID:", json.user._id);
-
-          // Save to correct storage
-          const storage = localStorage.getItem("token")
-            ? localStorage
-            : sessionStorage;
-
+          const storage = localStorage.getItem("token") ? localStorage : sessionStorage;
           storage.setItem("user", JSON.stringify(json.user));
           setUser(json.user);
           setIsAuthenticated(true);
-
-          console.log("✅ Profile loaded and state updated");
         } else {
           console.warn("⚠️ Invalid profile data structure:", json);
           clearAuthData();
         }
       } catch (err) {
         console.error("❌ Network error during profile fetch:", err);
-        console.error("❌ Error details:", {
-          name: err instanceof Error ? err.name : 'Unknown',
-          message: err instanceof Error ? err.message : String(err)
-        });
-        
-        // Don't clear auth on network errors - might be temporary
-        console.warn("⚠️ Network error - keeping authentication state");
       } finally {
         setLoading(false);
       }
@@ -237,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // ================================================================
-  // MAIN AUTH FLOW
+  // MAIN AUTH FLOW (Firebase Listener)
   // ================================================================
   useEffect(() => {
     console.log("🔧 SETTING UP FIREBASE AUTH LISTENER");
@@ -246,11 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("🔵 Firebase auth state changed");
       
       if (fbUser) {
-        console.log("🟢 Firebase user detected");
-        console.log("📧 Email:", fbUser.email);
-        console.log("🆔 UID:", fbUser.uid);
-        console.log("✅ Email verified:", fbUser.emailVerified);
-        
+        console.log("🟢 Firebase user detected:", fbUser.email);
         setFirebaseUser(fbUser);
         syncWithFirebase(fbUser);
       } else {
@@ -288,14 +264,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     fetchUserProfile,
   };
-
-  console.log("🔵 AuthContext current state:", {
-    hasUser: !!user,
-    isAuthenticated,
-    loading,
-    userEmail: user?.email || "none",
-    firebaseUser: firebaseUser?.email || "none"
-  });
 
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
