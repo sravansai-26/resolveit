@@ -45,18 +45,17 @@ jobs:
         with:
           cache-overwrite-existing: true
 
-      # This step will print the SHA-1 you need for Google/Firebase
-      - name: Get SHA1 Key
-        run: |
-          cd android
-          chmod +x ./gradlew
-          ./gradlew signingReport
-
       - name: Build Debug APK
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew clean assembleDebug
+          ./gradlew assembleDebug
+
+      # NOW the keystore exists, so this will work!
+      - name: Get SHA1 Key
+        run: |
+          cd android
+          ./gradlew signingReport
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
