@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "509516392972-2m5l08ta81qkd52st9bkp9o8c8hi0g7f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lyfspot.resolveit",
+            "certificate_hash": "318be69ea217d0d09042abfd2d965d94e3bcc03d"
+          }
+        },
+        {
+          "client_id": "509516392972-t7ldml2uq867obttq471ubj8si491beq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lyfspot.resolveit",
+            "certificate_hash": "37da277afbb19f1ebb88cfa8472d21c4e2a4927b"
+          }
+        },
+        {
           "client_id": "509516392972-cr87vd1nktn429rl2d96kcrjrrcd1fql.apps.googleusercontent.com",
           "client_type": 3
         }
