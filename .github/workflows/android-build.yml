@@ -53,25 +53,23 @@ jobs:
           cd android
           ./gradlew assembleRelease
 
-      # 🔐 SIGNING THE APK
+     # 🔐 SIGNING THE APK (Modern Version)
       - name: Sign APK
         id: sign_app
-        uses: r0adkll/sign-android-release@v1
+        uses: ilharp/sign-android-release@v1
         with:
-          releaseDirectory: android/app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          releaseDir: android/app/build/outputs/apk/release
+          signingKey: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          env:
-          # 🚀 FIX: This forces the action to find the actual build tools path on the runner
-          BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          # Note: The output variable name changed slightly for this action
+          files: ${{ steps.sign_app.outputs.signedFile }}
           name: Release ${{ github.ref_name }}
-          body: "Official Signed ResolveIt APK build. Note: Ensure the SHA-1 from the logs is added to Firebase."
+          body: "Official Signed ResolveIt APK build (v1.0.8)."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
