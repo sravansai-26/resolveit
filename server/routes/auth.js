@@ -66,7 +66,7 @@ const validateLogin = [
 ];
 
 // =========================
-// FORGOT PASSWORD
+// FORGOT PASSWORD (STABLE NON-BLOCKING VERSION)
 // =========================
 router.post("/forgot-password", async (req, res) => {
   console.log("\n🔵 POST /api/auth/forgot-password - Password reset request");
@@ -76,28 +76,32 @@ router.post("/forgot-password", async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       console.warn("⚠️ Forgot Password: User not found:", email);
-      return res.status(404).json({
-        success: false,
-        message: "No account found with that email address.",
+      // We still return 200/Success to prevent email enumeration (Security Best Practice)
+      return res.json({
+        success: true,
+        message: "If an account exists with that email, a reset link has been sent.",
       });
     }
 
     // 1. Generate Reset Token
     const resetToken = crypto.randomBytes(20).toString('hex');
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; // 1 Hour expiry
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 Hour
     await user.save();
 
-    // 2. Setup Nodemailer Transporter
+    // 2. Setup Optimized Transporter (Port 465 is best for Render)
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      // Short timeouts prevent the server from hanging
+      connectionTimeout: 10000, 
     });
 
-    // 3. Define Link (Uses CLIENT_URL from .env)
     const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
 
     const mailOptions = {
@@ -108,24 +112,29 @@ router.post("/forgot-password", async (req, res) => {
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
           <h2 style="color: #2563eb; text-align: center;">Password Reset Request</h2>
           <p>Hi ${user.firstName},</p>
-          <p>You requested a password reset for your ResolveIt account. Please click the button below to set a new password. This link is valid for 1 hour.</p>
+          <p>Click the button below to reset your password. This link is valid for 1 hour.</p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="${resetUrl}" style="background: #2563eb; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Reset Password</a>
           </div>
-          <p style="font-size: 0.8em; color: #666;">If you did not request this, please ignore this email. Your password will remain unchanged.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 0.8em; color: #999; text-align: center;">Developed by <b>LYFSpot</b></p>
+          <p style="font-size: 0.8em; color: #666; text-align: center;">Developed by <b>LYFSpot</b></p>
         </div>
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log("✅ Reset email sent successfully to:", email);
-    res.json({ success: true, message: "A password reset link has been sent to your email." });
+    // 🚀 FIRE AND FORGET: Do NOT use 'await' here
+    transporter.sendMail(mailOptions)
+      .then(() => console.log("✅ Background: Reset email sent to:", email))
+      .catch((err) => console.error("❌ Background: Reset email failed:", err.message));
+
+    // ⚡ RESPOND IMMEDIATELY: Axios will get this in milliseconds
+    return res.json({ 
+      success: true, 
+      message: "A password reset link has been sent to your email." 
+    });
 
   } catch (err) {
-    console.error("❌ Forgot Password error:", err);
-    res.status(500).json({ success: false, message: "Failed to send reset email. Try again later." });
+    console.error("❌ Forgot Password Controller Error:", err);
+    res.status(500).json({ success: false, message: "Server error. Please try again." });
   }
 });
 
