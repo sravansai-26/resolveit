@@ -1,7 +1,5 @@
-// src/components/Sidebar.tsx
-
 import { NavLink, useNavigate } from 'react-router-dom';
-import { X, Home, Upload, User, Info, MessageSquare, LogOut } from 'lucide-react';
+import { X, Home, Upload, User, Info, MessageSquare, LogOut, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 
@@ -14,11 +12,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const { isAuthenticated, logout, loading } = useAuth();
 
-  // 🔥 FIX: Proper async logout
   const handleLogout = async () => {
-    onClose(); // Close sidebar immediately (instant UX)
-    await logout(); // Wait for AuthContext cleanup
-    navigate("/login", { replace: true }); // Safe redirect
+    onClose(); 
+    await logout(); 
+    navigate("/login", { replace: true }); 
   };
 
   const navItems = [
@@ -29,12 +26,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { to: '/feedback', icon: MessageSquare, label: 'Feedback', authRequired: false },
   ];
 
-  // 🟢 Prevent flashing wrong state while AuthContext is loading
   if (loading) {
     return (
       <div
         className={cn(
-          "fixed top-0 left-0 h-full bg-white shadow-lg z-40 w-64 pt-16 flex items-center justify-center",
+          "fixed top-0 left-0 h-full bg-white shadow-lg z-40 w-64 pt-16 flex items-center justify-center transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -58,7 +54,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <X size={24} />
       </button>
 
-      <div className="p-6">
+      <div className="p-6 flex-grow">
         <nav className="space-y-2">
           {navItems
             .filter((item) => !item.authRequired || isAuthenticated)
@@ -80,6 +76,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <span>{item.label}</span>
               </NavLink>
             ))}
+
+          {/* GET RESOLVEIT GATEWAY BUTTON */}
+          <a
+            href="https://resolveit-gateway-temp.vercel.app" // Temporary Link
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onClose}
+            className="flex items-center space-x-3 p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all mt-4 shadow-md shadow-blue-100"
+            title="Download ResolveIt App"
+          >
+            <Download size={20} />
+            <span className="font-semibold">Get ResolveIt</span>
+          </a>
         </nav>
       </div>
 
@@ -87,11 +96,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="p-6 border-t">
           <button
             onClick={handleLogout}
-            className="flex items-center space-x-3 p-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-800 w-full"
+            className="flex items-center space-x-3 p-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-800 w-full transition-colors"
             title="Logout"
           >
             <LogOut size={20} />
-            <span>Logout</span>
+            <span className="font-medium">Logout</span>
           </button>
         </div>
       )}

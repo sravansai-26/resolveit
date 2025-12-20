@@ -104,7 +104,8 @@ router.get("/me", auth, async (req, res) => {
   console.log("🔵 Authenticated user email:", req.user?.email);
 
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    // 🛡️ Added -resetPasswordToken -resetPasswordExpires for security
+    const user = await User.findById(req.user._id).select("-password -resetPasswordToken -resetPasswordExpires");
 
     if (!user) {
       console.error("❌ User not found in database for ID:", req.user._id);

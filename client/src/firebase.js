@@ -1,11 +1,14 @@
-// src/firebase.js (FINAL PRODUCTION VERSION)
-
+// src/firebase.js (FIXED PRODUCTION VERSION)
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  setPersistence, 
+  browserLocalPersistence 
+} from 'firebase/auth';
 
 const firebaseConfig = {
-    // Reading public keys from Vercel Environment variables (VITE_ prefix required)
-   apiKey: "AIzaSyCPKJ6LO2Mylk5d4CNqkXkKRQK7jnmoPs4",
+  apiKey: "AIzaSyCPKJ6LO2Mylk5d4CNqkXkKRQK7jnmoPs4",
   authDomain: "resolveit-project.firebaseapp.com",
   projectId: "resolveit-project",
   storageBucket: "resolveit-project.firebasestorage.app",
@@ -15,10 +18,28 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-// This code remains the same, but now uses the dynamic config object
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+const auth = getAuth(app);
+
+/**
+ * 🛠️ FIX FOR MOBILE APK (Missing Initial State Error):
+ * We force 'browserLocalPersistence' so that the authentication state
+ * is saved in localStorage instead of sessionStorage. 
+ * This prevents the browser from "forgetting" the login request during redirects.
+ */
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log("Firebase: Local persistence enabled.");
+  })
+  .catch((error) => {
+    console.error("Firebase persistence error:", error);
+  });
+
 export const googleProvider = new GoogleAuthProvider(); 
 
-// NOTE: You must commit and push this updated src/firebase.js file.
-// Vercel will then use the secrets you set in Step 1.
+// Optional: Forces the account selection popup to show every time
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
+
+export { auth };

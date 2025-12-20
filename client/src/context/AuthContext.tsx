@@ -220,37 +220,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // MAIN AUTH FLOW (Firebase Listener)
   // ================================================================
   useEffect(() => {
-    console.log("🔧 SETTING UP FIREBASE AUTH LISTENER");
-
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      console.log("🔵 Firebase auth state changed");
+  const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    // 1. If we find a Firebase User (Google Login)
+    if (fbUser) {
+      setFirebaseUser(fbUser);
+      syncWithFirebase(fbUser);
+    } 
+    // 2. If NO Firebase User, only check for JWT if we aren't already logged in
+    else {
+      setFirebaseUser(null);
       
-      if (fbUser) {
-        console.log("🟢 Firebase user detected:", fbUser.email);
-        setFirebaseUser(fbUser);
-        syncWithFirebase(fbUser);
-      } else {
-        console.log("🔵 No Firebase user → checking JWT token");
-        setFirebaseUser(null);
-
+      // ONLY fetch if we don't already have a local 'user' state
+      if (!user) {
         const token = getToken();
         if (token) {
-          console.log("✅ JWT token found, fetching profile");
           fetchUserProfile();
         } else {
-          console.log("⚠️ No JWT token found");
-          clearAuthData();
           setLoading(false);
+          // Only clear if we were expecting a user but found nothing
+          if (isAuthenticated) clearAuthData();
         }
+      } else {
+        // We already have a JWT user, just stop the loading spinner
+        setLoading(false);
       }
-    });
+    }
+  });
 
-    return () => {
-      console.log("🔧 Cleaning up Firebase auth listener");
-      unsubscribe();
-    };
-  }, [syncWithFirebase, fetchUserProfile, getToken, clearAuthData]);
-
+  return () => unsubscribe();
+}, [syncWithFirebase, fetchUserProfile, getToken, clearAuthData, user, isAuthenticated]);
   // ================================================================
   // CONTEXT VALUE
   // ================================================================

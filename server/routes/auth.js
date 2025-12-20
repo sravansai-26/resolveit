@@ -1,7 +1,8 @@
-// routes/auth.js - COMPLETE FIXED VERSION WITH DEBUG LOGS
-
+// routes/auth.js - COMPLETE FIXED VERSION WITH DEBUG LOGS + FORGOT/RESET PASSWORD
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
 import * as admin from '../config/firebaseAdmin.js';
@@ -65,6 +66,107 @@ const validateLogin = [
 ];
 
 // =========================
+// FORGOT PASSWORD
+// =========================
+router.post("/forgot-password", async (req, res) => {
+  console.log("\n🔵 POST /api/auth/forgot-password - Password reset request");
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      console.warn("⚠️ Forgot Password: User not found:", email);
+      return res.status(404).json({
+        success: false,
+        message: "No account found with that email address.",
+      });
+    }
+
+    // 1. Generate Reset Token
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 Hour expiry
+    await user.save();
+
+    // 2. Setup Nodemailer Transporter
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    // 3. Define Link (Uses CLIENT_URL from .env)
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+    const mailOptions = {
+      from: `"ResolveIt Support" <${process.env.SMTP_USER}>`,
+      to: user.email,
+      subject: 'ResolveIt - Password Reset Request',
+      html: `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px; margin: auto;">
+          <h2 style="color: #2563eb; text-align: center;">Password Reset Request</h2>
+          <p>Hi ${user.firstName},</p>
+          <p>You requested a password reset for your ResolveIt account. Please click the button below to set a new password. This link is valid for 1 hour.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" style="background: #2563eb; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Reset Password</a>
+          </div>
+          <p style="font-size: 0.8em; color: #666;">If you did not request this, please ignore this email. Your password will remain unchanged.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+          <p style="font-size: 0.8em; color: #999; text-align: center;">Developed by <b>LYFSpot</b></p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log("✅ Reset email sent successfully to:", email);
+    res.json({ success: true, message: "A password reset link has been sent to your email." });
+
+  } catch (err) {
+    console.error("❌ Forgot Password error:", err);
+    res.status(500).json({ success: false, message: "Failed to send reset email. Try again later." });
+  }
+});
+
+// =========================
+// RESET PASSWORD
+// =========================
+router.post("/reset-password/:token", async (req, res) => {
+  console.log("\n🔵 POST /api/auth/reset-password - Password update attempt");
+  const { token } = req.params;
+  const { password } = req.body;
+
+  try {
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() } 
+    });
+
+    if (!user) {
+      console.warn("⚠️ Reset Password: Token invalid or expired");
+      return res.status(400).json({ 
+        success: false, 
+        message: "The reset link is invalid or has expired." 
+      });
+    }
+
+    // Update password (User model .pre('save') hook hashes this)
+    user.password = password; 
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    console.log("✅ Password successfully reset for:", user.email);
+    res.json({ success: true, message: "Password reset successful! You can now log in with your new password." });
+
+  } catch (err) {
+    console.error("❌ Reset Password error:", err);
+    res.status(500).json({ success: false, message: "Internal server error during password reset." });
+  }
+});
+
+// =========================
 // REGISTER
 // =========================
 router.post("/register", validateRegister, async (req, res) => {
@@ -84,7 +186,6 @@ router.post("/register", validateRegister, async (req, res) => {
 
     const { email } = req.body;
 
-    // Check existing user
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       console.warn("⚠️ User already exists:", email);
@@ -105,7 +206,6 @@ router.post("/register", validateRegister, async (req, res) => {
     const { token, expiresAt } = generateToken(user._id);
 
     console.log("✅ Registration successful for:", user.email);
-    console.log("🎫 Token generated, expires at:", new Date(expiresAt * 1000).toISOString());
 
     return res.status(201).json({
       success: true,
@@ -156,9 +256,6 @@ router.post("/login", validateLogin, async (req, res) => {
       });
     }
 
-    console.log("✅ User found:", user._id);
-
-    // Google accounts have NO password
     if (!user.password) {
       console.warn("⚠️ User has no password (Google account):", email);
       return res.status(403).json({
@@ -177,12 +274,7 @@ router.post("/login", validateLogin, async (req, res) => {
       });
     }
 
-    console.log("✅ Password verified");
-
     const { token, expiresAt } = generateToken(user._id);
-
-    console.log("✅ Login successful for:", user.email);
-    console.log("🎫 Token generated, expires at:", new Date(expiresAt * 1000).toISOString());
 
     return res.json({
       success: true,
@@ -218,48 +310,31 @@ router.post("/google", async (req, res) => {
     });
   }
 
-  console.log("🔵 Firebase ID token received (length:", idToken.length, ")");
-
-  // Get Firebase Admin instance
   const fbAdmin = admin.default || admin;
 
-  // Check if Admin SDK is initialized
   if (!fbAdmin.apps || !fbAdmin.apps.length) {
     console.error("❌ Firebase Admin SDK NOT initialized");
-    console.error("❌ Check FIREBASE_SERVICE_ACCOUNT_KEY environment variable");
     return res.status(500).json({
       success: false,
       message: "Server Error: Google Auth service unavailable",
     });
   }
 
-  console.log("✅ Firebase Admin SDK is initialized");
-
   try {
-    console.log("🔵 Verifying Firebase ID token...");
-
-    // Verify the Firebase ID token
     const decoded = await fbAdmin.auth().verifyIdToken(idToken);
     const { email, name, picture } = decoded;
 
-    console.log("✅ Firebase token verified successfully");
-    console.log("📧 Email:", email);
-    console.log("👤 Name:", name);
+    console.log("✅ Firebase token verified. Email:", email);
 
-    console.log("🔵 Checking if user exists in database...");
     let user = await User.findOne({ email });
 
-    // Create new user if doesn't exist
     if (!user) {
-      console.log("🔵 User not found, creating new user...");
+      console.log("🔵 User not found, creating new Google user...");
 
       const fullName = name || "Google User";
       const nameParts = fullName.split(" ");
       const firstName = nameParts[0];
       const lastName = nameParts.slice(1).join(" ") || "User";
-
-      console.log("👤 First Name:", firstName);
-      console.log("👤 Last Name:", lastName);
 
       user = new User({
         email,
@@ -269,20 +344,13 @@ router.post("/google", async (req, res) => {
         phone: "Not provided",
         address: "Not provided",
         bio: "Signed up via Google",
-        password: undefined, // No password for Google accounts
+        password: undefined, 
       });
 
       await user.save();
-      console.log("✅ New Google user created and saved:", user._id);
-    } else {
-      console.log("✅ Existing user found:", user._id);
     }
 
-    // Generate JWT token
     const { token, expiresAt } = generateToken(user._id);
-
-    console.log("✅ Google authentication successful for:", user.email);
-    console.log("🎫 Token generated, expires at:", new Date(expiresAt * 1000).toISOString());
 
     return res.json({
       success: true,
@@ -296,7 +364,6 @@ router.post("/google", async (req, res) => {
 
   } catch (err) {
     console.error("❌ Google token verification error:", err.message);
-    console.error("❌ Full error:", err);
     return res.status(401).json({
       success: false,
       message: "Unauthorized: Invalid or expired Google token",
@@ -309,8 +376,6 @@ router.post("/google", async (req, res) => {
 // =========================
 router.post("/logout", (req, res) => {
   console.log("🔵 POST /api/auth/logout - Logout request");
-  console.log("✅ Logout acknowledged (client will clear token)");
-
   return res.json({
     success: true,
     message: "Logout successful",

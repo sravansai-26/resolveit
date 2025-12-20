@@ -1,4 +1,4 @@
-// src/components/Navbar.tsx
+// src/components/Navbar.tsx - FULL CORRECTED VERSION
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, Upload, LogOut } from "lucide-react";
 import { Logo } from "./Logo";
@@ -19,19 +19,25 @@ export function Navbar({ toggleSidebar }: NavbarProps) {
     navigate("/login", { replace: true });
   };
 
-  // 1. Updated avatar constant logic
-const defaultAvatar = "https://ui-avatars.com/api/?name=" + (user?.email || "User") + "&background=0D8ABC&color=fff";
+  /**
+   * 🛡️ AVATAR LOGIC:
+   * 1. Check if user has an avatar.
+   * 2. If it's a full URL (Google or Cloudinary), use it directly.
+   * 3. Otherwise, use a clean fallback UI Avatar.
+   */
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${user?.firstName || "User"}&background=0D8ABC&color=fff`;
 
-const avatar = user?.avatar
-  ? `${import.meta.env.VITE_API_URL}/${user.avatar.replace(/^\/+/, "")}`
-  : defaultAvatar;
+  const avatar = user?.avatar ? user.avatar : defaultAvatar;
 
-  // Loading state prevents UI flicker
   if (loading) {
     return (
       <nav className="bg-white shadow-md fixed top-0 left-0 right-0 z-30">
         <div className="h-16 flex items-center justify-center">
-          <span className="text-gray-500 text-sm">Checking session...</span>
+          <div className="animate-pulse flex space-x-2">
+            <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+            <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+            <div className="h-2 w-2 bg-blue-400 rounded-full"></div>
+          </div>
         </div>
       </nav>
     );
@@ -46,79 +52,80 @@ const avatar = user?.avatar
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
 
-          {/* Left Section */}
+          {/* Left Section - Logo & Sidebar Toggle */}
           <div className="flex items-center">
             <button
               onClick={toggleSidebar}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
               aria-label="Open sidebar menu"
               title="Open Sidebar"
             >
               <Menu size={24} />
             </button>
 
-            <Link to="/" className="ml-4" title="Home" aria-current="page">
+            <Link to="/" className="ml-2 sm:ml-4" title="Home">
               <Logo />
             </Link>
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center space-x-4">
+          {/* Right Section - Auth Actions */}
+          <div className="flex items-center space-x-2 sm:space-x-4">
 
             {!isAuthenticated ? (
-              <>
-                {/* PUBLIC BUTTONS */}
+              <div className="flex items-center space-x-2">
                 <Link
                   to="/login"
-                  className="px-4 py-2 text-blue-600 hover:text-blue-800 font-medium"
+                  className="px-3 py-2 text-sm sm:text-base text-blue-600 hover:text-blue-800 font-medium transition-colors"
                 >
                   Login
                 </Link>
 
                 <Link
                   to="/register"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  className="px-3 py-2 text-sm sm:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-shadow shadow-md shadow-blue-100"
                 >
                   Register
                 </Link>
-              </>
+              </div>
             ) : (
-              <>
-                {/* =========================
-                   LOGGED-IN ACTION BUTTONS
-                   ========================= */}
-
-                {/* UPLOAD (icon) */}
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                {/* UPLOAD */}
                 <Link
                   to="/upload"
-                  className="p-2 rounded-full hover:bg-blue-100 transition"
+                  className="p-2 rounded-full hover:bg-blue-50 transition-colors group"
                   title="Upload Issue"
                 >
-                  <Upload size={22} className="text-gray-700" />
+                  <Upload size={22} className="text-gray-600 group-hover:text-blue-600" />
                 </Link>
 
-                {/* PROFILE (user avatar) */}
+                {/* PROFILE */}
                 <Link
                   to="/profile"
-                  title="Profile"
+                  title="Your Profile"
                   className="flex items-center"
                 >
                   <img
                     src={avatar}
-                    alt="User avatar"
-                    className="w-9 h-9 rounded-full object-cover border-2 border-transparent hover:border-blue-500 transition"
+                    alt="Profile"
+                    className="w-9 h-9 rounded-full object-cover border-2 border-transparent hover:border-blue-500 transition-all shadow-sm"
+                    /** * ⚡ CRITICAL FIX: If the image URL is broken (404), 
+                     * immediately switch to the fallback avatar.
+                     */
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = defaultAvatar;
+                    }}
                   />
                 </Link>
 
-                {/* LOGOUT (icon) */}
+                {/* LOGOUT */}
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-full hover:bg-red-100 transition"
+                  className="p-2 rounded-full hover:bg-red-50 transition-colors group"
                   title="Logout"
                 >
-                  <LogOut size={22} className="text-red-600" />
+                  <LogOut size={22} className="text-gray-600 group-hover:text-red-600" />
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>

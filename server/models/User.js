@@ -1,3 +1,4 @@
+// models/User.js - FULL UPDATED PRODUCTION VERSION
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
@@ -54,6 +55,18 @@ const userSchema = new mongoose.Schema(
       default: '',
     },
 
+    // ==========================================
+    // PASSWORD RESET FIELDS
+    // ==========================================
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
+
     createdAt: {
       type: Date,
       default: Date.now,
@@ -65,6 +78,8 @@ const userSchema = new mongoose.Schema(
       virtuals: true,
       transform: (doc, ret) => {
         delete ret.password;
+        delete ret.resetPasswordToken; // Security: Hide token from API responses
+        delete ret.resetPasswordExpires;
         delete ret.__v;
         return ret;
       },
@@ -84,6 +99,7 @@ userSchema.virtual('fullName').get(function () {
 // =======================
 // Hash password ONLY when created or modified
 userSchema.pre('save', async function (next) {
+  // If the password hasn't been modified (or doesn't exist for Google users), move on
   if (!this.isModified('password') || !this.password) return next();
 
   try {

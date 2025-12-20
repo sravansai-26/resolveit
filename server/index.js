@@ -43,6 +43,8 @@ app.use('/uploads', (req, res, next) => {
 -------------------------------------------------------- */
 const ALLOWED_ORIGINS = [
     "https://resolveit-welfare.vercel.app",
+    "https://resolveit-app.vercel.app",   // Added your primary frontend
+    "https://sailyfspot.blogspot.com",   // Added LYFSpot blog
     "http://localhost:5173",
     "http://localhost:5000",
     "http://192.168.24.6:5000",
@@ -136,8 +138,8 @@ app.use((req, res, next) => {
 -------------------------------------------------------- */
 if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
     console.error("❌ Missing required environment variables:");
-    if (!process.env.MONGODB_URI) console.error("  - MONGODB_URI");
-    if (!process.env.JWT_SECRET) console.error("  - JWT_SECRET");
+    if (!process.env.MONGODB_URI) console.error("  - MONGODB_URI");
+    if (!process.env.JWT_SECRET) console.error("  - JWT_SECRET");
     process.exit(1);
 }
 
@@ -186,10 +188,10 @@ console.log("✅ Routes registered");
 app.use((req, res) => {
     console.warn(`⚠️ 404 Not Found: ${req.method} ${req.path}`);
     console.warn("🔵 Available routes:");
-    console.warn("  - /api/auth/*");
-    console.warn("  - /api/users/*");
-    console.warn("  - /api/issues/*");
-    console.warn("  - /api/feedback/*");
+    console.warn("  - /api/auth/*");
+    console.warn("  - /api/users/*");
+    console.warn("  - /api/issues/*");
+    console.warn("  - /api/feedback/*");
     
     res.status(404).json({ 
         success: false, 
