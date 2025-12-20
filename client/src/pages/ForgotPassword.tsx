@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Mail, ArrowLeft, Send } from "lucide-react";
 import api from "../lib/api";
 
+// Make sure it is exported like this
 export function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,12 +22,18 @@ export function ForgotPassword() {
         setMessage({ type: 'error', text: resp.data.message || "Something went wrong." });
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: "Failed to connect. Ensure your email is correct." });
+      // Improved error logging for debugging the "Failed to connect" issue
+      console.error("Connection Error:", err);
+      setMessage({ 
+        type: 'error', 
+        text: err.response?.data?.message || "Failed to connect. Ensure your API URL is correct." 
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // CRITICAL: Ensure there is a RETURN statement here returning JSX
   return (
     <div className="max-w-md mx-auto mt-16 px-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
@@ -59,7 +66,7 @@ export function ForgotPassword() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
-                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
               <Mail className="absolute left-4 top-3.5 text-gray-400" size={18} />
             </div>
@@ -68,7 +75,7 @@ export function ForgotPassword() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg shadow-blue-200 disabled:opacity-50"
+            className="w-full flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg disabled:opacity-50"
           >
             {loading ? "Sending..." : <><Send size={18} className="mr-2" /> Send Reset Link</>}
           </button>

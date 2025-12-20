@@ -54,41 +54,59 @@ export function Login() {
     // ===========================================================
     // GOOGLE LOGIN
     // ===========================================================
-    const handleGoogleSignIn = async () => {
-        setLoading(true);
-        setFeedback(null);
-        setIsError(false);
+   // Integrated handleGoogleSignIn for Login.tsx
+const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setFeedback("Connecting to Google..."); // Clearer messaging
+    setIsError(false);
 
-        try {
-            const result = await signInWithPopup(auth, googleProvider);
-            const idToken = await result.user.getIdToken();
+    try {
+        // 1. Firebase Handshake
+        const result = await signInWithPopup(auth, googleProvider);
+        const idToken = await result.user.getIdToken();
 
-            setFeedback("Verifying Google token...");
+        // 2. Backend Verification
+        setFeedback("Verifying account with ResolveIt...");
+        
+        const resp = await api.post('/auth/google', { idToken });
+        
+        // Ensure data exists before destructuring
+        if (resp.data && resp.data.success) {
+            const { token, user } = resp.data.data;
 
-            const resp = await api.post('/auth/google', { idToken });
-            const data = resp.data;
-            const { token, user } = data.data;
+            // 3. Save to Local Context/Storage
+            login(token, user, true); 
 
-            login(token, user, true); // Always remember Google sign-in
-
-            setFeedback("Google sign-in successful!");
-
-            // Redirect immediately
+            setFeedback("Success! Welcome back.");
+            
+            // 4. Final Redirect
             navigate("/profile", { replace: true });
-
-        } catch (error: any) {
-            let msg = "Google sign-in failed.";
-
-            if (error?.code === "auth/popup-closed-by-user") msg = "Popup closed.";
-            if (error?.code === "auth/network-request-failed") msg = "Network error.";
-
-            setFeedback(msg);
-            setIsError(true);
-        } finally {
-            setLoading(false);
+        } else {
+            throw new Error(resp.data.message || "Backend verification failed");
         }
-    };
 
+    } catch (error: any) {
+        console.error("Google Auth Detailed Error:", error);
+        let msg = "Google sign-in failed.";
+
+        // Handle Firebase specific errors
+        if (error?.code === "auth/popup-closed-by-user") msg = "Sign-in cancelled.";
+        if (error?.code === "auth/network-request-failed") msg = "Network error. Check your internet.";
+        if (error?.code === "auth/internal-error") msg = "Firebase configuration error.";
+        
+        // Handle Axios/Backend errors
+        if (error.response) {
+          msg = error.response.data.message || "Server refused Google login.";
+        } else if (error.request) {
+          msg = "Server is taking too long to wake up. Please try again.";
+        }
+
+        setFeedback(msg);
+        setIsError(true);
+    } finally {
+        setLoading(false);
+    }
+};
     // ===========================================================
     // MANUAL LOGIN
     // ===========================================================
