@@ -1,10 +1,9 @@
-// src/firebase.js
 import { initializeApp } from 'firebase/app';
 import { 
-  initializeAuth, 
-  indexedDBLocalPersistence, 
+  getAuth, 
+  GoogleAuthProvider, 
   browserLocalPersistence, 
-  GoogleAuthProvider 
+  setPersistence 
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -17,22 +16,28 @@ const firebaseConfig = {
   measurementId: "G-S91L1D13HD"
 };
 
-// Initialize Firebase App
+// 1. Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
+// 2. Initialize Auth
+const auth = getAuth(app);
+
 /**
- * 🛠️ THE ULTIMATE APK FIX (Missing Initial State):
- * We use 'initializeAuth' instead of 'getAuth'.
- * We prioritize 'indexedDBLocalPersistence' because it is more robust 
- * than localStorage in mobile WebView environments.
+ * 🛠️ STABILITY FIX:
+ * We force 'browserLocalPersistence' which works across both 
+ * standard browsers and Android WebViews to keep the user logged in.
  */
-const auth = initializeAuth(app, {
-  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-});
+setPersistence(auth, browserLocalPersistence)
+  .then(() => {
+    console.log("Firebase: Persistence set to Local.");
+  })
+  .catch((error) => {
+    console.error("Firebase Persistence Error:", error);
+  });
 
 export const googleProvider = new GoogleAuthProvider(); 
 
-// Forces the account selection popup to show every time
+// Forces account selection popup every time
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });

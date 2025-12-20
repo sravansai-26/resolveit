@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/share": "^8.0.0",
     "@react-google-maps/api": "^2.19.3",
     "axios": "^1.9.0",
     "clsx": "^2.1.0",

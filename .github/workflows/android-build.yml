@@ -1,4 +1,4 @@
-name: Build and Release APK
+name: Build and Release Signed APK
 
 on:
   push:
@@ -31,37 +31,44 @@ jobs:
         run: |
           cd client
           npm install
-          echo "VITE_API_URL=${{ secrets.REACT_APP_API_URL }}" > .env
           npm run build
         
       - name: Sync Capacitor
         run: |
           npm install @capacitor/cli @capacitor/core @capacitor/android
-          npx cap copy android
           npx cap sync android
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-overwrite-existing: true
 
-      - name: Build Debug APK
+      # 🔍 STEP TO GET SHA-1 (This will show in your GitHub Action logs)
+      - name: Get SHA1 and SHA256 Keys
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew signingReport
 
-      # NOW the keystore exists, so this will work!
-      - name: Get SHA1 Key
+      - name: Build Release APK
         run: |
           cd android
-          ./gradlew signingReport
+          ./gradlew assembleRelease
+
+      # 🔐 SIGNING THE APK
+      - name: Sign APK
+        id: sign_app
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: ${{ steps.sign_app.outputs.signedReleaseFile }}
           name: Release ${{ github.ref_name }}
-          body: "Official ResolveIt APK build. Developed by LYFSpot."
+          body: "Official Signed ResolveIt APK build. Note: Ensure the SHA-1 from the logs is added to Firebase."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

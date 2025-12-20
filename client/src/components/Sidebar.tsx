@@ -1,5 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { X, Home, Upload, User, Info, MessageSquare, LogOut, Share2, Globe } from 'lucide-react';
+import { X, Home, Upload, User, Info, MessageSquare, LogOut, Share2, Globe, Download } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,7 +12,10 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, loading } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
+  
+  // 🔍 Identify Platform
+  const isApp = Capacitor.isNativePlatform();
 
   const handleLogout = async () => {
     onClose();
@@ -18,24 +23,30 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     navigate("/login", { replace: true });
   };
 
-  // Logic to share the app using native Android share sheet
   const handleShare = async () => {
-    const shareData = {
-      title: 'ResolveIt Community',
-      text: 'Hey! Check out ResolveIt, a community platform to report and resolve local issues.',
-      url: 'https://resolveit-community.vercel.app', // Link to your website/download page
-    };
+    const webUrl = 'https://resolveit-community.vercel.app';
+    const gatewayUrl = 'https://resolveit-gateway-temp.vercel.app'; // Your download page
 
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        // Fallback: Copy to clipboard if Share API isn't supported
-        await navigator.clipboard.writeText(shareData.url);
-        alert('App link copied to clipboard!');
+    if (isApp) {
+      // 📱 APK LOGIC: Use Native Share Sheet
+      try {
+        await Share.share({
+          title: 'ResolveIt Community',
+          text: 'Join our community to report and resolve local issues!',
+          url: gatewayUrl, // Share the download link
+          dialogTitle: 'Share ResolveIt App',
+        });
+      } catch (err) {
+        console.error('Share failed', err);
       }
-    } catch (err) {
-      console.log('Error sharing:', err);
+    } else {
+      // 🌐 WEB LOGIC: Professional Copy to Clipboard
+      try {
+        await navigator.clipboard.writeText(webUrl);
+        alert('Website link copied to clipboard! Share it with your community.');
+      } catch (err) {
+        alert('Copy failed. Please copy the URL from your browser bar.');
+      }
     }
   };
 
@@ -48,19 +59,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   ];
 
   return (
-    <div
-      className={cn(
+    <div className={cn(
         'fixed top-0 left-0 h-full bg-white shadow-lg transition-transform duration-300 ease-in-out z-40 w-64 pt-16 flex flex-col',
         isOpen ? 'translate-x-0' : '-translate-x-full'
-      )}
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close sidebar"
-        title="Close sidebar"
-        className="absolute top-4 right-4 p-2 rounded-lg text-gray-600 hover:bg-gray-100"
-      >
+      )}>
+      
+      <button type="button" title="Close sidebar" onClick={onClose} className="absolute top-4 right-4 p-2 rounded-lg text-gray-600 hover:bg-gray-100">
         <X size={24} />
       </button>
 
@@ -73,12 +77,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 key={item.to}
                 to={item.to}
                 onClick={onClose}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center space-x-3 p-3 rounded-lg transition-colors',
-                    isActive ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-blue-50'
-                  )
-                }
+                className={({ isActive }) => cn(
+                  'flex items-center space-x-3 p-3 rounded-lg transition-colors',
+                  isActive ? 'bg-blue-100 text-blue-600' : 'text-gray-700 hover:bg-blue-50'
+                )}
               >
                 <item.icon size={20} />
                 <span className="font-medium">{item.label}</span>
@@ -87,29 +89,53 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </nav>
       </div>
 
-      {/* FOOTER ACTIONS SECTION */}
+      {/* FOOTER ACTIONS SECTION: SWITCHES BASED ON PLATFORM */}
       <div className="p-4 border-t space-y-2 bg-gray-50">
-        {/* Visit Website Link */}
-        <a
-          href="https://resolveit-community.vercel.app"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center space-x-3 p-3 rounded-lg text-gray-600 hover:bg-white hover:text-blue-600 transition-all text-sm"
-        >
-          <Globe size={18} />
-          <span>Visit Website</span>
-        </a>
+        
+        {isApp ? (
+          /* APK ONLY BUTTONS */
+          <>
+            <a
+              href="https://resolveit-community.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-3 p-3 rounded-lg text-gray-600 hover:bg-white hover:text-blue-600 transition-all text-sm"
+            >
+              <Globe size={18} />
+              <span>Visit Web Portal</span>
+            </a>
 
-        {/* Share App Button */}
-        <button
-          onClick={handleShare}
-          className="flex items-center space-x-3 p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 w-full transition-all shadow-md shadow-blue-100"
-        >
-          <Share2 size={18} />
-          <span className="font-semibold">Share App</span>
-        </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center space-x-3 p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 w-full shadow-md shadow-blue-100 transition-all"
+            >
+              <Share2 size={18} />
+              <span className="font-semibold">Share this App</span>
+            </button>
+          </>
+        ) : (
+          /* WEB ONLY BUTTONS */
+          <>
+            <button
+              onClick={handleShare}
+              className="flex items-center space-x-3 p-3 rounded-lg text-gray-600 hover:bg-white hover:text-blue-600 transition-all text-sm w-full"
+            >
+              <Share2 size={18} />
+              <span>Share Website</span>
+            </button>
 
-        {/* Logout Button */}
+            <a
+              href="https://resolveit-gateway-temp.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-3 p-3 rounded-lg bg-green-600 text-white hover:bg-green-700 w-full shadow-md shadow-green-100 transition-all"
+            >
+              <Download size={18} />
+              <span className="font-semibold">Get ResolveIt (APK)</span>
+            </a>
+          </>
+        )}
+
         {isAuthenticated && (
           <button
             onClick={handleLogout}
