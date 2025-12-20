@@ -3,7 +3,8 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   browserLocalPersistence, 
-  setPersistence 
+  setPersistence,
+  signInWithPopup // 👈 Added for stable Mobile Auth
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -24,8 +25,8 @@ const auth = getAuth(app);
 
 /**
  * 🛠️ STABILITY FIX:
- * We force 'browserLocalPersistence' which works across both 
- * standard browsers and Android WebViews to keep the user logged in.
+ * Forces persistence to LocalStorage. This ensures that even if the 
+ * WebView is killed in the background, the user stays logged in.
  */
 setPersistence(auth, browserLocalPersistence)
   .then(() => {
@@ -41,5 +42,8 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
+
+// Helper for stable login on both Web and APK
+export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
 export { auth };

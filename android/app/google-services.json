@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "509516392972-jmkin3ep6t2tkidrarv6shhqv6bktkn5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lyfspot.resolveit",
+            "certificate_hash": "a5b185f65bd9d09601b9dda7fb817fcf5de3cbef"
+          }
+        },
+        {
           "client_id": "509516392972-t7ldml2uq867obttq471ubj8si491beq.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
