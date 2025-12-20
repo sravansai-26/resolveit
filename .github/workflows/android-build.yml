@@ -63,6 +63,9 @@ jobs:
           alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          env:
+          # 🚀 FIX: This forces the action to find the actual build tools path on the runner
+          BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
