@@ -26,6 +26,9 @@ dist-ssr
 # This is where your private key would live if not using an ENV variable.
 serviceAccountKey.json 
 
+# keystore
+resolveit.keystore
+
 # === Build/Cache Directories ===
 # VITE/Webpack Build and Cache
 /build

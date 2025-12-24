@@ -98,8 +98,9 @@ router.post("/forgot-password", async (req, res) => {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
-      // Short timeouts prevent the server from hanging
-      connectionTimeout: 10000, 
+      // Add these specific socket settings
+  connectionTimeout: 10000,
+  socketTimeout: 10000,
     });
 
     const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;

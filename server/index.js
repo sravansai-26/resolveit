@@ -42,8 +42,8 @@ app.use('/uploads', (req, res, next) => {
     CRITICAL FIX: CORS Configuration (BEFORE other middleware)
 -------------------------------------------------------- */
 const ALLOWED_ORIGINS = [
+    "https://resolveit-community.vercel.app", // Your actual website and primary one
     "https://resolveit-welfare.vercel.app",
-    "https://resolveit-app.vercel.app",   // Added your primary frontend
     "https://sailyfspot.blogspot.com",   // Added LYFSpot blog
     "http://localhost:5173",
     "http://localhost:5000",
