@@ -125,7 +125,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             </button>
 
             <a
-              href="https://resolveit-gateway-temp.vercel.app"
+              href="https://resolveit-gateway.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center space-x-3 p-3 rounded-lg bg-green-600 text-white hover:bg-green-700 w-full shadow-md shadow-green-100 transition-all"
