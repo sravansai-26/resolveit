@@ -3,31 +3,42 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.lyfspot.resolveit',
   appName: 'Resolveit',
-  webDir: 'client/dist',
+  // Ensure this points to your client build folder
+  webDir: 'client/dist', 
   
-  // === CRITICAL FIXES FOR ANDROID REDIRECTS ===
+  // === NETWORK & SECURITY FIXES ===
   server: {
-    // Ensures the WebView uses HTTPS locally
+    // Required for modern Android WebView to handle HTTPS and cookies correctly
     androidScheme: 'https', 
+    // Allows loading images from your Render/Firebase backend
+    allowNavigation: ['*'],
   },
 
   plugins: {
-    // Explicitly define Google Auth settings to help the build system
+    // === GOOGLE AUTH CONFIGURATION ===
     GoogleAuth: {
       scopes: ['profile', 'email'],
-      // Note: You may need to add your actual web client ID here later
+      /**
+       * 🚀 CRITICAL: You MUST use the "Web Client ID" here, NOT the Android ID.
+       * Find this in Google Cloud Console -> Credentials -> OAuth 2.0 Client IDs.
+       */
+      serverClientId: '509516392972-cr87vd1nktn429rl2d96kcrjrrcd1fql.apps.googleusercontent.com',
+      forceCodeForRefreshToken: true,
     },
     
-    // AppLauncher settings are often needed for redirects to work reliably
+    // === DEEP LINKING FIX ===
     AppLauncher: {
-        // This is a common fix to handle the return URL from third-party services
-        launchUrl: 'com.lyfspot.resolveit://' 
+      // Handles the handshake when returning from the Google login screen
+      launchUrl: 'com.lyfspot.resolveit://' 
     }
   },
-  
-  // Use the Android block for specific preferences (though the plugins block should be enough)
+
+  // === ANDROID SPECIFIC PREFERENCES ===
   android: {
-    // No further preferences needed here if plugins are correct
+    // Standard preference for modern Capacitor apps
+    backgroundColor: "#ffffff",
+    allowMixedContent: true,
+    captureInput: true,
   }
 };
 

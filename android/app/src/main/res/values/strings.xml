@@ -4,4 +4,6 @@
     <string name="title_activity_main">Resolveit</string>
     <string name="package_name">com.lyfspot.resolveit</string>
     <string name="custom_url_scheme">com.lyfspot.resolveit</string>
+
+    <string name="server_client_id">509516392972-cr87vd1nktn429rl2d96kcrjrrcd1fql.apps.googleusercontent.com</string>
 </resources>
