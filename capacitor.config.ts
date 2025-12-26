@@ -3,20 +3,23 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.lyfspot.resolveit',
   appName: 'Resolveit',
-  // 🚀 CRITICAL: This must match where your Vite 'dist' folder is located
+  // Matches your Vite build folder
   webDir: 'client/dist', 
 
   server: {
-    // Required for modern Android security and cookie handling
+    // 🚀 FIX: androidScheme must be 'https' for secure cookie/image handling
     androidScheme: 'https', 
+    // 🚀 FIX: allows navigation to any external URL (Backend/Image hosting)
     allowNavigation: ['*'],
+    // 🚀 FIX: This specifically helps loading images from non-SSL or mixed sources
+    cleartext: true 
   },
 
   plugins: {
     GoogleAuth: {
       scopes: ['profile', 'email'],
       /**
-       * 🚀 Verified Web Client ID
+       * 🚀 Verified Web Client ID (ending in .apps.googleusercontent.com)
        */
       serverClientId: '509516392972-cr87vd1nktn429rl2d96kcrjrrcd1fql.apps.googleusercontent.com',
       forceCodeForRefreshToken: true,
@@ -30,9 +33,9 @@ const config: CapacitorConfig = {
 
   android: {
     backgroundColor: "#ffffff",
+    // 🚀 FIX: Vital for showing images that might be on a different protocol (HTTP/HTTPS)
     allowMixedContent: true,
     captureInput: true,
-    // Ensures the app doesn't crash on older WebViews
     minWebViewVersion: 60 
   }
 };
