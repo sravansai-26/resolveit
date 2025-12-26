@@ -3,14 +3,18 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
+  // 🚀 THE CRITICAL FIX: Ensures assets use relative paths (./)
+  // Without this, the APK looks in the wrong place and stays white.
+  base: './',
+
   plugins: [react()],
   
-  // 🔥 appType: "spa" ensures your routing works correctly on page refreshes
+  // Ensures single-page application routing works on refresh
   appType: "spa",
 
   resolve: {
     alias: {
-      // Allows using '@' to refer to your 'src' folder for cleaner imports
+      // Matches your project imports like '@/components/...'
       "@": path.resolve(__dirname, "./src"),
     },
   },
@@ -18,30 +22,17 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    
-    // 🚀 THE GUNSHOT FIX: Rollup settings to handle Capacitor
+    // We removed the 'external' block. 
+    // Vite will now bundle Capacitor properly into the APK.
     rollupOptions: {
-      /**
-       * We list these as 'external' so Rollup doesn't panic when it can't 
-       * find the native source code during the web-bundling phase.
-       */
-      external: [
-        "@capacitor/core",
-        "@codetrix-studio/capacitor-google-auth",
-        "@capacitor/app",
-        "@capacitor/haptics",
-        "@capacitor/keyboard",
-        "@capacitor/status-bar"
-      ],
       output: {
-        // Ensures proper pathing for assets in the APK WebView
         manualChunks: undefined,
       },
     },
   },
 
   server: {
-    host: true, // Needed for local network testing on physical devices
+    host: true,
     port: 5173,
     proxy: {
       "/api": {

@@ -2,13 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  browserLocalPersistence, 
-  setPersistence,
+  indexedDBLocalPersistence, // 🚀 Required for APK stability
+  browserLocalPersistence,
+  initializeAuth, 
   signInWithPopup,
-  signInWithCredential // 👈 Added for Native APK login
+  signInWithCredential 
 } from 'firebase/auth';
-import { Capacitor } from '@capacitor/core'; // 👈 Needed for platform detection
-import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth'; // 👈 Native Plugin
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCPKJ6LO2Mylk5d4CNqkXkKRQK7jnmoPs4",
@@ -23,24 +24,22 @@ const firebaseConfig = {
 // 1. Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// 2. Initialize Auth
-const auth = getAuth(app);
+// 2. 🛡️ Initialize Auth with "White Screen" Prevention
+// We use a conditional check to ensure the correct persistence is used.
+let auth;
 
-// Initialize Native Google Auth for Capacitor
-if (Capacitor.getPlatform() !== 'web') {
-    GoogleAuth.initialize();
-}
-
-/**
- * 🛠️ STABILITY FIX:
- */
-setPersistence(auth, browserLocalPersistence)
-  .then(() => {
-    console.log("Firebase: Persistence set to Local.");
-  })
-  .catch((error) => {
-    console.error("Firebase Persistence Error:", error);
+if (Capacitor.isNativePlatform()) {
+  // On Android/iOS, we MUST use initializeAuth to avoid crashing the WebView
+  auth = initializeAuth(app, {
+    persistence: indexedDBLocalPersistence
   });
+  
+  // Initialize the native Google Auth plugin
+  GoogleAuth.initialize();
+} else {
+  // On Web, the standard getAuth is perfectly fine
+  auth = getAuth(app);
+}
 
 export const googleProvider = new GoogleAuthProvider(); 
 
@@ -50,7 +49,7 @@ googleProvider.setCustomParameters({
 
 /**
  * 🚀 HYBRID LOGIN HELPER
- * Identifies if user is on Web or APK and uses the appropriate method.
+ * This single function works seamlessly for both your Web site and the APK.
  */
 export const signInWithGoogle = async () => {
   const platform = Capacitor.getPlatform();
@@ -58,12 +57,12 @@ export const signInWithGoogle = async () => {
   if (platform === 'web') {
     // === WEB LOGIC ===
     console.log("Initiating Web Google Login...");
-    return signInWithPopup(auth, googleProvider);
+    return await signInWithPopup(auth, googleProvider);
   } else {
     // === APK/ANDROID LOGIC ===
     console.log("Initiating Native APK Google Login...");
     try {
-      // 1. Trigger the native Android account selector
+      // 1. Trigger the native Android account selector (Native Layer)
       const googleUser = await GoogleAuth.signIn();
       
       // 2. Extract the ID Token from the native response
@@ -72,8 +71,9 @@ export const signInWithGoogle = async () => {
       // 3. Create a Firebase Credential using that token
       const credential = GoogleAuthProvider.credential(idToken);
       
-      // 4. Sign into Firebase with the native credential
-      return signInWithCredential(auth, credential);
+      // 4. Sign into Firebase with the native credential (Web Layer)
+      // We 'await' here to ensure the login completes before the UI continues.
+      return await signInWithCredential(auth, credential);
     } catch (error) {
       console.error("Native Google Login Failed:", error);
       throw error;
