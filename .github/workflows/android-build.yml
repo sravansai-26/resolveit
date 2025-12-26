@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    # 🚀 GLOBAL FIX: This ensures all npm commands ignore version conflicts
+    env:
+      NPM_CONFIG_LEGACY_PEER_DEPS: true 
 
     steps:
       - name: Checkout Code
@@ -35,19 +39,18 @@ jobs:
         
       - name: Sync Capacitor
         run: |
-          npm install @capacitor/cli @capacitor/core @capacitor/android
+          # Use legacy-peer-deps explicitly here just in case
+          npm install @capacitor/cli @capacitor/core @capacitor/android --legacy-peer-deps
           npx cap sync android
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # 🔐 DECODE KEYSTORE FILE
-      # This takes your Base64 secret and turns it back into a file Gradle can read
       - name: Prepare Keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
 
-      # 🔍 STEP TO GET SHA-1 (Critical for Google Login)
+      # 🔍 CRITICAL: This step will output your production SHA-1 in the GitHub logs
       - name: Get SHA1 and SHA256 Keys
         run: |
           cd android
@@ -58,7 +61,6 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      # 🚀 BUILD AND SIGN (No more external "Signer" actions)
       - name: Build Signed Release APK
         run: |
           cd android
@@ -71,9 +73,18 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # The signed APK is generated here by default
           files: android/app/build/outputs/apk/release/app-release.apk
           name: Release ${{ github.ref_name }}
-          body: "Official Signed ResolveIt APK (v1.0.8). Note: Ensure SHA-1 is updated in Firebase."
+          body: |
+            ### Official Signed ResolveIt APK (${{ github.ref_name }})
+            
+            **Release Notes:**
+            - Hybrid Google Auth Fix (Native APK + Web Popup)
+            - Fixed Profile and Feed Image loading via Cleartext Traffic
+            - Modernized tsconfig pathing
+            
+            **Important:** Ensure you copy the SHA-1 from the "Get SHA1 and SHA256 Keys" step in this Action's log and add it to your Firebase Console.
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
