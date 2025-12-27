@@ -33,10 +33,13 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // This middleware ensures the Access-Control-Allow-Origin: * header
 // is sent with all static files from /uploads, allowing the mobile WebView
 // to load cross-origin images without the ERR_BLOCKED_BY_RESPONSE error.
+// ✅ FIX: Allow images to load in Web + APK
 app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*'); 
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
 }, express.static(join(__dirname, 'uploads')));
+
 
 /* --------------------------------------------------------
     CRITICAL FIX: CORS Configuration (BEFORE other middleware)
@@ -97,12 +100,21 @@ app.options("*", cors(corsOptions));
     CRITICAL FIX: Cross-Origin Headers for Firebase
     These must come AFTER CORS but BEFORE routes
 -------------------------------------------------------- */
+// ✅ Apply Google popup headers ONLY for Google auth endpoint
 app.use((req, res, next) => {
-    // Allow Firebase pop-up to communicate with parent window
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+    if (req.path.startsWith("/api/auth/google")) {
+        res.setHeader(
+          "Cross-Origin-Opener-Policy",
+          "same-origin-allow-popups"
+        );
+        res.setHeader(
+          "Cross-Origin-Embedder-Policy",
+          "credentialless"
+        );
+    }
     next();
 });
+
 
 /* --------------------------------------------------------
     Security Headers (with adjustments for Firebase)

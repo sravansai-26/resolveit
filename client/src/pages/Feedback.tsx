@@ -1,10 +1,8 @@
-// src/pages/Feedback.tsx
 import { useState } from "react";
 import { Send } from "lucide-react";
 
 export function Feedback() {
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState("");
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
@@ -16,6 +14,7 @@ export function Feedback() {
         {submitted ? (
           <div
             role="alert"
+            aria-live="polite"
             className="p-4 bg-green-100 text-green-700 rounded-md font-medium"
           >
             ✅ Thank you! Your feedback has been sent successfully.
@@ -26,12 +25,22 @@ export function Feedback() {
             method="POST"
             className="space-y-6"
             onSubmit={() => {
-              setError("");
+              // ❌ Do NOT preventDefault
+              // ✅ Allow native browser submit
               setSubmitted(true);
             }}
           >
-            {/* Hidden metadata */}
-            <input type="hidden" name="form_type" value="feedback" />
+            {/* Hidden metadata (VERY IMPORTANT) */}
+            <input
+              type="hidden"
+              name="_subject"
+              value="ResolveIt – User Feedback"
+            />
+            <input
+              type="hidden"
+              name="form_type"
+              value="feedback"
+            />
 
             {/* Feedback Type */}
             <div>
@@ -45,6 +54,7 @@ export function Feedback() {
                 id="type"
                 name="type"
                 required
+                title="Select the type of feedback"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
               >
                 <option value="">Select type</option>
@@ -91,7 +101,7 @@ export function Feedback() {
               />
             </div>
 
-            {/* Optional Email */}
+            {/* Email (optional for feedback – correct choice) */}
             <div>
               <label
                 htmlFor="email"
@@ -116,15 +126,6 @@ export function Feedback() {
               <Send size={18} />
               Submit Feedback
             </button>
-
-            {error && (
-              <div
-                role="alert"
-                className="mt-3 p-3 bg-red-100 text-red-700 rounded-md"
-              >
-                {error}
-              </div>
-            )}
           </form>
         )}
       </div>
