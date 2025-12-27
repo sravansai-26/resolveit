@@ -16,7 +16,7 @@ const __dirname = dirname(__filename);
 import authRoutes from './routes/auth.js';
 import issueRoutes from './routes/issues.js';
 import userRoutes from './routes/users.js';
-import feedbackRoutes from './routes/feedback.js';
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -179,7 +179,6 @@ console.log("🔧 Registering routes...");
 app.use("/api/auth", authRoutes);
 app.use("/api/issues", issueRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/feedback", feedbackRoutes);
 console.log("✅ Routes registered");
 
 /* --------------------------------------------------------
@@ -191,7 +190,6 @@ app.use((req, res) => {
     console.warn("  - /api/auth/*");
     console.warn("  - /api/users/*");
     console.warn("  - /api/issues/*");
-    console.warn("  - /api/feedback/*");
     
     res.status(404).json({ 
         success: false, 

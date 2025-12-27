@@ -5,7 +5,8 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import User from '../models/User.js';
 import { body, validationResult } from 'express-validator';
-import * as admin from '../config/firebaseAdmin.js';
+import admin from '../config/firebaseAdmin.js';
+
 
 const router = express.Router();
 

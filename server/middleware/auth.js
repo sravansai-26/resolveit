@@ -98,7 +98,12 @@ export const auth = async (req, res, next) => {
     console.log("✅ User ID:", user._id);
 
     // Attach user to request
-    req.user = user;
+   req.user = {
+  _id: user._id,
+  userId: user._id,   // 🔑 IMPORTANT: backward + forward compatibility
+  email: user.email,
+};
+
     
     console.log("✅ Authentication successful - proceeding to route handler");
 

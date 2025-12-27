@@ -16,6 +16,8 @@ import { TermsOfService } from './pages/TermsOfService';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword"; // Added for Forgot Password flow
+import ReportIssue from "./pages/report-issue/ReportIssue";
+
 
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
@@ -52,6 +54,8 @@ function App() {
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/report-issue" element={<ReportIssue />} />
+
               
               {/* Reset Password Route - Receives the token from the email link */}
               <Route path="/reset-password/:token" element={<ResetPassword />} />

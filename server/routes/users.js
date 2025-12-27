@@ -49,7 +49,7 @@ const pickUserFields = (body) => {
 };
 
 const getPublicIdFromUrl = (url) => {
-  const match = url.match(/\/v\d+\/resolveit_users\/(.+?)\.\w+$/);
+  const match = url.match(/resolveit_users\/([^/.]+)/);
   return match ? `resolveit_users/${match[1]}` : null;
 };
 
@@ -90,6 +90,7 @@ const uploadToCloudinary = (file) =>
         }
       }
     );
+
     streamifier.createReadStream(file.buffer).pipe(stream);
   });
 
@@ -99,41 +100,35 @@ const uploadToCloudinary = (file) =>
 
 // GET /api/users/me - Get current user profile
 router.get("/me", auth, async (req, res) => {
+  const userId = req.user?._id || req.user?.userId;
+
   console.log("\n🔵 GET /api/users/me - Profile fetch request");
-  console.log("🔵 Authenticated user ID:", req.user?._id);
+  console.log("🔵 Authenticated user ID:", userId);
   console.log("🔵 Authenticated user email:", req.user?.email);
 
   try {
-    // 🛡️ Added -resetPasswordToken -resetPasswordExpires for security
-    const user = await User.findById(req.user._id).select("-password -resetPasswordToken -resetPasswordExpires");
+    const user = await User.findById(userId)
+      .select("-password -resetPasswordToken -resetPasswordExpires");
 
     if (!user) {
-      console.error("❌ User not found in database for ID:", req.user._id);
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
+      console.error("❌ User not found in database for ID:", userId);
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
       });
     }
 
     console.log("✅ User profile found:", user.email);
-    console.log("✅ Profile data:", {
-      id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      address: user.address
-    });
 
-    res.json({ 
-      success: true, 
-      user: user.toJSON() 
+    res.json({
+      success: true,
+      user: user.toJSON(),
     });
   } catch (err) {
     console.error("❌ GET /me error:", err);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to load profile" 
+    res.status(500).json({
+      success: false,
+      message: "Failed to load profile",
     });
   }
 });
@@ -144,28 +139,36 @@ router.put(
   auth,
   (req, res, next) => {
     console.log("\n🔵 PUT /api/users/me - Profile update request");
-    console.log("🔵 Authenticated user ID:", req.user?._id);
+    console.log(
+      "🔵 Authenticated user ID:",
+      req.user?._id || req.user?.userId
+    );
 
     uploadAvatar(req, res, (err) => {
       if (err) {
         console.error("❌ Multer error:", err.message);
-        return res.status(400).json({ success: false, message: err.message });
+        return res.status(400).json({
+          success: false,
+          message: err.message,
+        });
       }
       next();
     });
   },
   async (req, res) => {
+    const userId = req.user?._id || req.user?.userId;
+
     try {
       console.log("🔵 Update request body:", req.body);
       console.log("🔵 File uploaded:", req.file ? "Yes" : "No");
 
-      const user = await User.findById(req.user._id);
-      
+      const user = await User.findById(userId);
+
       if (!user) {
-        console.error("❌ User not found in database for ID:", req.user._id);
-        return res.status(404).json({ 
-          success: false, 
-          message: "User not found" 
+        console.error("❌ User not found in database for ID:", userId);
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
         });
       }
 
@@ -181,8 +184,8 @@ router.put(
         avatarUrl = await uploadToCloudinary(req.file);
       }
 
-      // Clearing avatar
-      if (req.body.avatar === "") {
+      // Clearing avatar (only when no file upload)
+      if (req.body.avatar === "" && !req.file) {
         console.log("🔵 Clearing avatar...");
         if (avatarUrl) await deleteOldAvatar(avatarUrl);
         avatarUrl = "";
@@ -195,7 +198,6 @@ router.put(
       await user.save();
 
       console.log("✅ Profile updated successfully:", user.email);
-      console.log("✅ Updated fields:", Object.keys(updates));
 
       res.json({
         success: true,
@@ -204,9 +206,9 @@ router.put(
       });
     } catch (err) {
       console.error("❌ PUT /me error:", err);
-      res.status(500).json({ 
-        success: false, 
-        message: "Failed to update profile" 
+      res.status(500).json({
+        success: false,
+        message: "Failed to update profile",
       });
     }
   }
