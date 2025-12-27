@@ -6,8 +6,8 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { LogIn, Mail, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider } from "../firebase";
+// 🔥 FIX: Import the hybrid helper instead of calling signInWithPopup directly
+import { auth, signInWithGoogle } from "../firebase";
 import api from "../lib/api";
 
 export function Login() {
@@ -54,59 +54,63 @@ export function Login() {
     // ===========================================================
     // GOOGLE LOGIN
     // ===========================================================
-   // Integrated handleGoogleSignIn for Login.tsx
-const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setFeedback("Connecting to Google..."); // Clearer messaging
-    setIsError(false);
+    const handleGoogleSignIn = async () => {
+        setLoading(true);
+        setFeedback("Connecting to Google..."); // Clearer messaging
+        setIsError(false);
 
-    try {
-        // 1. Firebase Handshake
-        const result = await signInWithPopup(auth, googleProvider);
-        const idToken = await result.user.getIdToken();
+        try {
+            // 1. 🔥 FIX: Hybrid Handshake (Detects Web vs APK automatically)
+            const result = await signInWithGoogle();
+            const idToken = await result.user.getIdToken();
 
-        // 2. Backend Verification
-        setFeedback("Verifying account with ResolveIt...");
-        
-        const resp = await api.post('/auth/google', { idToken });
-        
-        // Ensure data exists before destructuring
-        if (resp.data && resp.data.success) {
-            const { token, user } = resp.data.data;
-
-            // 3. Save to Local Context/Storage
-            login(token, user, true); 
-
-            setFeedback("Success! Welcome back.");
+            // 2. Backend Verification
+            setFeedback("Verifying account with ResolveIt...");
             
-            // 4. Final Redirect
-            navigate("/profile", { replace: true });
-        } else {
-            throw new Error(resp.data.message || "Backend verification failed");
+            const resp = await api.post('/auth/google', { idToken });
+            
+            // Ensure data exists before destructuring
+            if (resp.data && resp.data.success) {
+                const { token, user } = resp.data.data;
+
+                // 3. Save to Local Context/Storage
+                login(token, user, true); 
+
+                setFeedback("Success! Welcome back.");
+                
+                // 4. Final Redirect
+                navigate("/profile", { replace: true });
+            } else {
+                throw new Error(resp.data.message || "Backend verification failed");
+            }
+
+        } catch (error: any) {
+            console.error("Google Auth Detailed Error:", error);
+            let msg = "Google sign-in failed.";
+
+            // Handle Firebase/Capacitor specific errors
+            if (error?.code === "auth/popup-closed-by-user" || error?.message?.includes("popup-closed")) {
+                msg = "Sign-in cancelled.";
+            } else if (error?.code === "auth/network-request-failed") {
+                msg = "Network error. Check your internet.";
+            } else if (error?.code === "auth/internal-error") {
+                msg = "Firebase configuration error.";
+            }
+            
+            // Handle Axios/Backend errors
+            if (error.response) {
+                msg = error.response.data.message || "Server refused Google login.";
+            } else if (error.request) {
+                msg = "Server is taking too long to wake up. Please try again.";
+            }
+
+            setFeedback(msg);
+            setIsError(true);
+        } finally {
+            setLoading(false);
         }
+    };
 
-    } catch (error: any) {
-        console.error("Google Auth Detailed Error:", error);
-        let msg = "Google sign-in failed.";
-
-        // Handle Firebase specific errors
-        if (error?.code === "auth/popup-closed-by-user") msg = "Sign-in cancelled.";
-        if (error?.code === "auth/network-request-failed") msg = "Network error. Check your internet.";
-        if (error?.code === "auth/internal-error") msg = "Firebase configuration error.";
-        
-        // Handle Axios/Backend errors
-        if (error.response) {
-          msg = error.response.data.message || "Server refused Google login.";
-        } else if (error.request) {
-          msg = "Server is taking too long to wake up. Please try again.";
-        }
-
-        setFeedback(msg);
-        setIsError(true);
-    } finally {
-        setLoading(false);
-    }
-};
     // ===========================================================
     // MANUAL LOGIN
     // ===========================================================
@@ -141,7 +145,7 @@ const handleGoogleSignIn = async () => {
 
         } catch (err: any) {
             setIsError(true);
-            setFeedback("Network error. Try again.");
+            setFeedback(err?.response?.data?.message || "Network error. Try again.");
         } finally {
             setLoading(false);
         }
@@ -185,7 +189,7 @@ const handleGoogleSignIn = async () => {
                     disabled={loading}
                 >
                     <img src="/google-logo.svg" alt="Google logo" className="h-5 w-5" />
-                    <span>Sign in with Google</span>
+                    <span>{loading ? "Processing..." : "Sign in with Google"}</span>
                 </button>
 
                 <div className="relative flex items-center mb-6">
@@ -198,10 +202,10 @@ const handleGoogleSignIn = async () => {
 
                     {/* Email */}
                     <div>
-                        <label htmlFor="email" className="block text-sm">
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                             Email Address
                         </label>
-                        <div className="relative">
+                        <div className="relative mt-1">
                             <input
                                 id="email"
                                 type="email"
@@ -212,18 +216,18 @@ const handleGoogleSignIn = async () => {
                                 aria-label="Email"
                                 required
                                 autoComplete="email"
-                                className="pl-10 w-full rounded-lg border"
+                                className="pl-10 w-full rounded-lg border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
                             />
-                            <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
+                            <Mail className="absolute left-3 top-2.5 text-gray-400" size={18} />
                         </div>
                     </div>
 
                     {/* Password */}
                     <div>
-                        <label htmlFor="password" className="block text-sm">
+                        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                             Password
                         </label>
-                        <div className="relative">
+                        <div className="relative mt-1">
                             <input
                                 id="password"
                                 type="password"
@@ -234,15 +238,15 @@ const handleGoogleSignIn = async () => {
                                 aria-label="Password"
                                 required
                                 autoComplete="current-password"
-                                className="pl-10 w-full rounded-lg border"
+                                className="pl-10 w-full rounded-lg border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
                             />
-                            <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
+                            <Lock className="absolute left-3 top-2.5 text-gray-400" size={18} />
                         </div>
                     </div>
 
                     {/* Remember Me */}
                     <div className="flex items-center justify-between">
-                        <label className="flex items-center">
+                        <label className="flex items-center text-sm text-gray-700">
                             <input
                                 type="checkbox"
                                 id="rememberMe"
@@ -250,14 +254,18 @@ const handleGoogleSignIn = async () => {
                                 checked={formData.rememberMe}
                                 onChange={handleChange}
                                 aria-label="Remember me"
-                                className="mr-2"
+                                className="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
                             Remember me
                         </label>
 
-                        <Link to="/forgot-password" className="text-sm text-blue-600">
-                            Forgot password?
-                        </Link>
+                       {/* Find this section in your Login.tsx */}
+<Link 
+    to={loading ? "#" : "/forgot-password"} // Prevent navigation if loading
+    className={`text-sm text-blue-600 hover:text-blue-800 ${loading ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
+>
+    Forgot password?
+</Link>
                     </div>
 
                     {/* Submit */}
@@ -265,16 +273,16 @@ const handleGoogleSignIn = async () => {
                         type="submit"
                         disabled={loading}
                         aria-label="Sign in"
-                        className="w-full flex items-center justify-center bg-blue-600 text-white rounded-lg py-2"
+                        className="w-full flex items-center justify-center bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 transition-colors disabled:opacity-50"
                     >
                         <LogIn size={20} className="mr-2" />
                         {loading ? "Signing in..." : "Sign In"}
                     </button>
                 </form>
 
-                <p className="text-center mt-6 text-sm">
+                <p className="text-center mt-6 text-sm text-gray-600">
                     Don’t have an account?{" "}
-                    <Link to="/register" className="text-blue-600">
+                    <Link to="/register" className="text-blue-600 font-medium hover:text-blue-800">
                         Sign up
                     </Link>
                 </p>

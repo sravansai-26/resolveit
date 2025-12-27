@@ -18,8 +18,11 @@ api.interceptors.request.use(
       const token = localStorage.getItem("token") || sessionStorage.getItem("token");
       
       if (token) {
-        // Use standard assignment for consistency
-        config.headers.Authorization = `Bearer ${token}`;
+        // 🔥 FIX: Use config.headers.set for better compatibility with modern Axios versions
+        // and to ensure it isn't stripped during cross-origin requests.
+        if (config.headers) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
       }
       
       // Debug log for APK testing
@@ -56,10 +59,15 @@ api.interceptors.response.use(
 
       // Only redirect if not already on the login/forgot-password pages
       const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password'];
-      const isPublicPath = publicPaths.some(path => window.location.pathname.startsWith(path));
+      
+      // Safety check for 'window' availability (critical for some native environments)
+      if (typeof window !== 'undefined') {
+          const isPublicPath = publicPaths.some(path => window.location.pathname.startsWith(path));
 
-      if (!isPublicPath) {
-        window.location.href = '/login';
+          if (!isPublicPath) {
+            // Using replace to prevent back-button loops
+            window.location.replace('/login');
+          }
       }
     }
     return Promise.reject(error);

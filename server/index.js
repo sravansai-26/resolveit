@@ -17,7 +17,6 @@ import authRoutes from './routes/auth.js';
 import issueRoutes from './routes/issues.js';
 import userRoutes from './routes/users.js';
 
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -28,50 +27,31 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 /* --------------------------------------------------------
-    Serve uploads folder (CRITICAL FIX FOR IMAGE CORS)
--------------------------------------------------------- */
-// This middleware ensures the Access-Control-Allow-Origin: * header
-// is sent with all static files from /uploads, allowing the mobile WebView
-// to load cross-origin images without the ERR_BLOCKED_BY_RESPONSE error.
-// ✅ FIX: Allow images to load in Web + APK
-app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    next();
-}, express.static(join(__dirname, 'uploads')));
-
-
-/* --------------------------------------------------------
-    CRITICAL FIX: CORS Configuration (BEFORE other middleware)
+    CRITICAL FIX: CORS Configuration
 -------------------------------------------------------- */
 const ALLOWED_ORIGINS = [
-    "https://resolveit-community.vercel.app", // Your actual website and primary one
+    "https://resolveit-community.vercel.app",
     "https://resolveit-welfare.vercel.app",
-    "https://sailyfspot.blogspot.com",   // Added LYFSpot blog
+    "https://sailyfspot.blogspot.com",
     "http://localhost:5173",
     "http://localhost:5000",
     "http://192.168.24.6:5000",
-    // === CRITICAL ADDITIONS FOR MOBILE/CAPACITOR ===
-    "http://localhost",       // Generic localhost for Capacitor's WebView.
-    "https://localhost",      // Secure localhost used by Capacitor on Android.
-    "http://10.0.2.2",        // Android Emulator's loopback IP address.
-    "capacitor://localhost",  // Standard origin for Capacitor apps.
-    "http://192.168.x.x",     // Placeholder for physical device Wi-Fi testing
-    // === CRITICAL ADDITION FOR FIREBASE REDIRECT ===
-    "https://resolveit-api.onrender.com" // Must allow your API domain for Firebase redirects.
+    "http://localhost",
+    "https://localhost",
+    "http://10.0.2.2",
+    "capacitor://localhost",
+    "https://resolveit-api.onrender.com"
 ];
 
 const corsOptions = {
     origin: function (origin, callback) {
         console.log("🔵 CORS Check - Origin:", origin);
         
-        // Allow requests with no origin (mobile apps, Postman, file://, etc.)
         if (!origin) {
             console.log("✅ No origin - allowing request");
             return callback(null, true);
         }
 
-        // Check if origin is in allowed list or is a Vercel subdomain
         const isVercelSubdomain = origin.endsWith(".vercel.app");
         const isAllowed = ALLOWED_ORIGINS.includes(origin) || isVercelSubdomain;
 
@@ -88,44 +68,45 @@ const corsOptions = {
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     exposedHeaders: ["Authorization"],
     optionsSuccessStatus: 204,
-    maxAge: 86400 // 24 hours
+    maxAge: 86400 
 };
 
 app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly
 app.options("*", cors(corsOptions));
 
 /* --------------------------------------------------------
-    CRITICAL FIX: Cross-Origin Headers for Firebase
-    These must come AFTER CORS but BEFORE routes
+    Security Headers (with adjustments for Firebase & Images)
 -------------------------------------------------------- */
-// ✅ Apply Google popup headers ONLY for Google auth endpoint
+app.use(
+    helmet({
+        // ✅ Allow cross-origin resources (fixes the image loading error)
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+        crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+        crossOriginEmbedderPolicy: false,
+        contentSecurityPolicy: false, 
+    })
+);
+
+/* --------------------------------------------------------
+    CRITICAL FIX: Cross-Origin Headers for Firebase
+-------------------------------------------------------- */
 app.use((req, res, next) => {
     if (req.path.startsWith("/api/auth/google")) {
-        res.setHeader(
-          "Cross-Origin-Opener-Policy",
-          "same-origin-allow-popups"
-        );
-        res.setHeader(
-          "Cross-Origin-Embedder-Policy",
-          "credentialless"
-        );
+        res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+        res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
     }
     next();
 });
 
-
 /* --------------------------------------------------------
-    Security Headers (with adjustments for Firebase)
+    Serve uploads folder (CRITICAL FIX FOR IMAGE CORS)
+    ✅ MOVED: After Helmet/CORS so headers are preserved
 -------------------------------------------------------- */
-app.use(
-    helmet({
-        crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-        crossOriginEmbedderPolicy: false,
-        contentSecurityPolicy: false, // Disable if causing issues with Firebase
-    })
-);
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+}, express.static(join(__dirname, 'uploads')));
 
 /* --------------------------------------------------------
     Request Logging
@@ -134,7 +115,6 @@ if (process.env.NODE_ENV === "development") {
     app.use(morgan("dev"));
 }
 
-// Log all requests for debugging
 app.use((req, res, next) => {
     console.log(`\n📨 ${req.method} ${req.path}`);
     console.log("🔵 Headers:", {
@@ -176,7 +156,6 @@ app.get("/", (req, res) => {
     });
 });
 
-// Health check endpoint
 app.get("/api/health", (req, res) => {
     res.json({
         success: true,
@@ -186,7 +165,6 @@ app.get("/api/health", (req, res) => {
     });
 });
 
-// Mount API routes
 console.log("🔧 Registering routes...");
 app.use("/api/auth", authRoutes);
 app.use("/api/issues", issueRoutes);
@@ -194,15 +172,10 @@ app.use("/api/users", userRoutes);
 console.log("✅ Routes registered");
 
 /* --------------------------------------------------------
-    404 Handler - CRITICAL: Must come after all routes
+    404 Handler
 -------------------------------------------------------- */
 app.use((req, res) => {
     console.warn(`⚠️ 404 Not Found: ${req.method} ${req.path}`);
-    console.warn("🔵 Available routes:");
-    console.warn("  - /api/auth/*");
-    console.warn("  - /api/users/*");
-    console.warn("  - /api/issues/*");
-    
     res.status(404).json({ 
         success: false, 
         message: "Endpoint not found",
@@ -217,9 +190,7 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     console.error("🔥 Global Error Handler:");
     console.error("🔥 Error:", err.message);
-    console.error("🔥 Stack:", err.stack);
     
-    // Handle specific error types
     if (err.name === 'UnauthorizedError') {
         return res.status(401).json({
             success: false,
@@ -235,7 +206,6 @@ app.use((err, req, res, next) => {
         });
     }
 
-    // CORS errors
     if (err.message.includes('CORS')) {
         return res.status(403).json({
             success: false,
@@ -243,7 +213,6 @@ app.use((err, req, res, next) => {
         });
     }
 
-    // Generic error
     res.status(err.status || 500).json({
         success: false,
         message: err.message || "Internal server error",
@@ -260,14 +229,12 @@ app.use((err, req, res, next) => {
 process.on("SIGINT", async () => {
     console.log("\n🔵 Shutting down gracefully...");
     await mongoose.connection.close();
-    console.log("✅ MongoDB disconnected");
     process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
     console.log("\n🔵 SIGTERM received, shutting down...");
     await mongoose.connection.close();
-    console.log("✅ MongoDB disconnected");
     process.exit(0);
 });
 

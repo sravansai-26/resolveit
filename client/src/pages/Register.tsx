@@ -6,8 +6,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+// 🔥 FIX: Import the hybrid helper instead of calling signInWithPopup directly here
+import { signInWithGoogle } from '../firebase';
 import api from '../lib/api';
 
 export function Register() {
@@ -54,7 +54,8 @@ export function Register() {
         setIsError(false);
 
         try {
-            const result = await signInWithPopup(auth, googleProvider);
+            // 🔥 FIX: This now correctly detects Web vs APK via your firebase.ts logic
+            const result = await signInWithGoogle();
             const idToken = await result.user.getIdToken();
 
             setFeedback("Verifying Google token...");
@@ -72,8 +73,13 @@ export function Register() {
 
         } catch (error: any) {
             let message = "Google sign-up failed.";
-            if (error?.code === "auth/popup-closed-by-user") message = "Popup closed.";
-            if (error?.code === "auth/network-request-failed") message = "Network error.";
+            
+            // Handle Firebase and Capacitor specific error codes
+            if (error?.code === "auth/popup-closed-by-user" || error?.message?.includes("popup-closed")) {
+                message = "Popup closed.";
+            } else if (error?.code === "auth/network-request-failed") {
+                message = "Network error.";
+            }
 
             console.error("Google Sign-Up Error:", error);
 
@@ -137,7 +143,7 @@ export function Register() {
 
         } catch (error: any) {
             setIsError(true);
-            setFeedback("Network error. Try again.");
+            setFeedback(error?.response?.data?.message || "Network error. Try again.");
         } finally {
             setLoading(false);
         }
@@ -174,7 +180,7 @@ export function Register() {
                     disabled={loading}
                 >
                     <img src="/google-logo.svg" alt="Google logo" className="h-5 w-5" />
-                    <span>Sign up with Google</span>
+                    <span>{loading ? "Processing..." : "Sign up with Google"}</span>
                 </button>
 
                 <div className="relative flex items-center mb-6">

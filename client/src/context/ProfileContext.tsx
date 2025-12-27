@@ -111,11 +111,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setUser({
         ...authUser,
         avatar: authUser.avatar
-          ? `${authUser.avatar}?t=${Date.now()}`
+          ? `${authUser.avatar}${authUser.avatar.includes('?') ? '&' : '?'}t=${Date.now()}`
           : undefined,
       });
     } else {
       setUser(null);
+      // Reset initialization on logout so next login triggers fresh fetch
+      hasInitializedRef.current = false;
+      setIssues([]);
+      setReposts([]);
     }
   }, [authUser]);
 
@@ -316,15 +320,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       console.log("🔵 ProfileContext: Initializing...");
 
       if (!isAuthenticated || hasInitializedRef.current) {
+        if (!isAuthenticated) {
+           console.log("🔵 ProfileContext: Not authenticated, skipping init");
+        }
         setLoading(false);
         return;
       }
 
       hasInitializedRef.current = true;
+      setLoading(true);
 
       try {
-        await fetchIssues();
-        await fetchReposts();
+        // Parallel fetching for performance
+        await Promise.all([fetchIssues(), fetchReposts()]);
         console.log("✅ Profile data loaded");
       } catch (err) {
         console.error("❌ Error loading profile data:", err);

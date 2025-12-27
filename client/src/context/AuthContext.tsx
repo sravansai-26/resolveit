@@ -21,7 +21,7 @@ import { auth as firebaseAuth } from "../firebase";
 import api from "../lib/api";
 
 /* =========================================================
-   TYPES
+    TYPES
 ========================================================= */
 interface AuthContextType {
   user: ProfileUser | null;
@@ -37,7 +37,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /* =========================================================
-   AUTH PROVIDER
+    AUTH PROVIDER
 ========================================================= */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const auth: Auth = firebaseAuth;
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isFetchingProfileRef = useRef(false);
 
   /* =========================================================
-     TOKEN HELPERS
+      TOKEN HELPERS
   ========================================================= */
   const getToken = useCallback(() => {
     return (
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /* =========================================================
-     HYDRATION (STORAGE → STATE)
+      HYDRATION (STORAGE → STATE)
   ========================================================= */
   useEffect(() => {
     const savedUser =
@@ -90,11 +90,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Set loading to false initially if we have local data, 
+    // but the onAuthStateChanged listener will provide finality.
     setLoading(false);
   }, [clearAuthData]);
 
   /* =========================================================
-     LOGIN (JWT)
+      LOGIN (JWT)
   ========================================================= */
   const login = useCallback(
     (token: string, userData: ProfileUser, rememberMe: boolean) => {
@@ -109,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /* =========================================================
-     LOGOUT
+      LOGOUT
   ========================================================= */
   const logout = useCallback(async () => {
     try {
@@ -128,17 +130,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [auth, clearAuthData]);
 
   /* =========================================================
-     FIREBASE → BACKEND SYNC (GOOGLE LOGIN)
+      FIREBASE → BACKEND SYNC (GOOGLE LOGIN)
   ========================================================= */
   const syncWithFirebase = useCallback(
     async (fbUser: FirebaseUser) => {
       if (hasSyncedFirebaseRef.current) return;
-      if (user) return; // 🔑 already have JWT user
+      if (user) {
+        setLoading(false);
+        return; 
+      }
 
       hasSyncedFirebaseRef.current = true;
       setLoading(true);
 
       try {
+        // 🔥 Use true to force refresh token for APK stability
         const idToken = await fbUser.getIdToken(true);
         const resp = await api.post("/auth/google", { idToken });
         const json = resp.data;
@@ -158,13 +164,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /* =========================================================
-     FETCH PROFILE (JWT SESSION)
+      FETCH PROFILE (JWT SESSION)
   ========================================================= */
   const fetchUserProfile = useCallback(async () => {
     if (isFetchingProfileRef.current) return;
 
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+        setLoading(false);
+        return;
+    }
 
     isFetchingProfileRef.current = true;
     setLoading(true);
@@ -192,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [getToken, clearAuthData]);
 
   /* =========================================================
-     MAIN AUTH LISTENER
+      MAIN AUTH LISTENER
   ========================================================= */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -206,6 +215,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // No Firebase user → JWT session
       if (!user) {
         fetchUserProfile();
+      } else {
+        setLoading(false);
       }
     });
 
@@ -213,7 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [auth, syncWithFirebase, fetchUserProfile, user]);
 
   /* =========================================================
-     CONTEXT VALUE
+      CONTEXT VALUE
   ========================================================= */
   const value: AuthContextType = {
     user,
@@ -234,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 /* =========================================================
-   HOOK
+    HOOK
 ========================================================= */
 export function useAuth() {
   const context = useContext(AuthContext);
