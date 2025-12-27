@@ -200,28 +200,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [getToken, clearAuthData]);
 
-  /* =========================================================
-      MAIN AUTH LISTENER
-  ========================================================= */
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      setFirebaseUser(fbUser);
+ /* =========================================================
+    MAIN AUTH LISTENER (FIXED VERSION)
+========================================================= */
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    setFirebaseUser(fbUser);
 
-      if (fbUser) {
-        syncWithFirebase(fbUser);
-        return;
-      }
-
-      // No Firebase user → JWT session
+    if (fbUser) {
+      // 🛑 STOP THE LOOP: 
+      // If we already have a JWT 'user' in our state, do NOT call syncWithFirebase again.
       if (!user) {
-        fetchUserProfile();
+        console.log("🔄 New Firebase user detected, syncing...");
+        syncWithFirebase(fbUser);
       } else {
+        console.log("✅ User already synced with JWT, skipping loop.");
         setLoading(false);
       }
-    });
+      return;
+    }
 
-    return () => unsubscribe();
-  }, [auth, syncWithFirebase, fetchUserProfile, user]);
+    // No Firebase user → Check for existing JWT session
+    if (!user) {
+      fetchUserProfile();
+    } else {
+      setLoading(false);
+    }
+  });
+
+  return () => unsubscribe();
+}, [auth, syncWithFirebase, fetchUserProfile, user]); // 'user' must be in dependencies
 
   /* =========================================================
       CONTEXT VALUE

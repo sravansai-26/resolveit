@@ -78,13 +78,14 @@ app.options("*", cors(corsOptions));
     Security Headers (with adjustments for Firebase & Images)
 -------------------------------------------------------- */
 app.use(
-    helmet({
-        // ✅ Allow cross-origin resources (fixes the image loading error)
-        crossOriginResourcePolicy: { policy: "cross-origin" },
-        crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-        crossOriginEmbedderPolicy: false,
-        contentSecurityPolicy: false, 
-    })
+  helmet({
+    // This allows the Google Popup to talk back to your App
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    // This allows your app to load images from your Render URL
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false,
+  })
 );
 
 /* --------------------------------------------------------
@@ -103,8 +104,9 @@ app.use((req, res, next) => {
     ✅ MOVED: After Helmet/CORS so headers are preserved
 -------------------------------------------------------- */
 app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // This tells the APK WebView that it's allowed to display these images
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     next();
 }, express.static(join(__dirname, 'uploads')));
 
