@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Point to this site's sitemap
+Sitemap: https://resolveit-community.vercel.app/sitemap.xml
+
+# Tell Google the Download Gateway is a related sister-site
+Sitemap: https://resolveit-gateway.vercel.app/sitemap.xml
