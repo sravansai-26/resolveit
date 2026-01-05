@@ -1,9 +1,7 @@
 User-agent: *
 Allow: /
 
-# Block internal or non-public routes
 Disallow: /api/
 Disallow: /admin/
 
-# Main site sitemap ONLY
 Sitemap: https://resolveit-community.me/sitemap.xml
