@@ -24,7 +24,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   };
 
   const handleShare = async () => {
-    const webUrl = 'https://resolveit-community.vercel.app';
+    const webUrl = 'https://www.resolveit-community.me/';
     const gatewayUrl = 'https://resolveit-gateway-temp.vercel.app'; // Your download page
 
     if (isApp) {
@@ -96,7 +96,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           /* APK ONLY BUTTONS */
           <>
             <a
-              href="https://resolveit-community.vercel.app"
+              href="https://www.resolveit-community.me/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center space-x-3 p-3 rounded-lg text-gray-600 hover:bg-white hover:text-blue-600 transition-all text-sm"

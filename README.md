@@ -13,7 +13,7 @@ The primary goal of Resolveit is to enhance accountability and responsiveness in
 Resolveit introduces unique features to maximize the impact of citizen reports:
 
 * **Citizen Reporting:** Users can submit detailed reports of issues in their surroundings, including descriptions and necessary media files (images/video snaps).
-* **Community Polling System:** A dedicated polling feature allows the community to vote on the severity and urgency of each reported issue. This process generates a consensus-based severity score.
+* **Community Polling System:** A dedicated polling feature allows the community to vote on the severity and urgency of each reported issues. This process generates a consensus-based severity score.
 * **Automated Authority Communication:** Based on the system's severity score and automated analysis, the platform automatically generates a formal, detailed email report and sends it to the respective government authority or concerned department.
 * **Transparent Tracking:** Users can track the status of their reported issues from submission to resolution.
 * **User Authentication:** Secure login and registration process for validated community members.
