@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    # 🚀 GLOBAL FIX: This ensures all npm commands ignore version conflicts
+    # 🚀 GLOBAL FIX: Handles npm version conflicts
     env:
       NPM_CONFIG_LEGACY_PEER_DEPS: true 
 
@@ -30,6 +30,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: gradle # ⚡️ Speeds up future builds
 
       - name: Build Frontend
         run: |
@@ -39,23 +40,27 @@ jobs:
         
       - name: Sync Capacitor
         run: |
-          # Use legacy-peer-deps explicitly here just in case
           npm install @capacitor/cli @capacitor/core @capacitor/android --legacy-peer-deps
           npx cap sync android
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # 🛠 FIX: Inject a backup mirror to avoid the 403 Forbidden error
+      - name: Inject Maven Mirror Fix
+        run: |
+          sed -i 's/mavenCentral()/maven { url "https:\/\/repo1.maven.org\/maven2\/" }/g' android/build.gradle || true
+          sed -i 's/google()/google()\n        maven { url "https:\/\/repo1.maven.org\/maven2\/" }/g' android/build.gradle || true
+
       - name: Prepare Keystore
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
 
-      # 🔍 CRITICAL: This step will output your production SHA-1 in the GitHub logs
       - name: Get SHA1 and SHA256 Keys
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew signingReport
+          ./gradlew signingReport -Dorg.gradle.internal.http.socketTimeout=60000 -Dorg.gradle.internal.http.connectionTimeout=60000
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -64,7 +69,7 @@ jobs:
       - name: Build Signed Release APK
         run: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace -Dorg.gradle.internal.http.socketTimeout=120000 -Dorg.gradle.internal.http.connectionTimeout=120000
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -81,9 +86,9 @@ jobs:
             **Release Notes:**
             - Hybrid Google Auth Fix (Native APK + Web Popup)
             - Fixed Profile and Feed Image loading via Cleartext Traffic
-            - Modernized tsconfig pathing
+            - Bypass Maven Central 403 Forbidden Issues
             
-            **Important:** Ensure you copy the SHA-1 from the "Get SHA1 and SHA256 Keys" step in this Action's log and add it to your Firebase Console.
+            **Note:** Check logs for SHA-1 keys to update Firebase.
           draft: false
           prerelease: false
         env:
